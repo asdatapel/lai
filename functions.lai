@@ -1,0 +1,36 @@
+implicit_void_no_params :: () {
+    print(5);
+}
+
+implicit_void_with_params :: (x: int, b := 3) {
+    print(5);
+}
+
+implicit_int_with_params :: (x: int, b := 3) {
+    return b + x;
+}
+
+implicit_int_with_params :: (x: int, b := 3) {
+    return b + x;
+}
+
+implicit_int_with_params :: (x: int, b := 3) {
+    return b + x;
+}
+
+//wierd one
+wierd :: (t: Type){
+    a : Type : (t) -> bool;
+    // if t is i32, than a is a function pointer 
+}
+
+
+// function pointers (THESE ARE ALL ASSIGNING THE TYPE TO THE VAR)
+a_void_function := ();
+another_void_function := () -> void;
+void_function_with_params := (u32, s8);
+function_with_named_params := (x : u32, s8); // should named parameters fail? what if there are default values?
+function_with_explicit := (u32, s8) -> i8;
+empty_function_with_explicit := () -> i8;
+
+type_explicit : Type = () -> i8;

@@ -1,0 +1,66 @@
+- ask lexer for 'segments' that end with a certain token
+- lexer should also provide the token after the current segment
+    - should start the file with currentSegment = empty, and nextToken = the first 
+      token of the file
+- each segment should store whether it contains a comma (which means its a function)
+- example segments:
+    - '(' ends with ')', '{' ends with '}'
+    - #string ANY_TOKEN ends with ANY_TOKEN 
+    - #load ends with a string literal ????????????????
+    - the header for a 'for' ends with '{', then the block body ends with '}' ??????
+
+
+----------- 
+[] is zero or more
+rules:
+    LoadDirective :==
+    - #load StringExpression ;
+    StringDirective :==
+    - #string ...1 ... ...1 ;
+
+    DeclarationStatement :==
+    - ... : ... : Expression ;
+    - ... : ... = Expression ;
+    - ... :: ... ;
+    - ... := ... ;
+    - ... : Expression ;
+    AssignmentStatement :==
+    - ... = Expression ;
+    ReturnStatement :==
+    - return Expression ;
+    BlockStatement :==
+    - { [ Statement ] } ;
+    ExpressionStatement :==
+    - Expression ;
+
+    NumberExpression :==
+    - -123
+    - -0x123abc
+    - -1.2
+    - 0b01011
+    StringExpression :==
+    - "..."
+    - RawStringDirective
+    BinaryPlusExpression :==
+    - Expression + Expression
+    VarReferenceExpression :==
+    - ...
+    FunctionCallExpression :==
+    - Expression . ()
+    - Expression . ( Expression [ , Expression ] )
+    FunctionDefinitionExpression :==
+    - ( ) { [ Statement ] }
+    - ( DeclarationStatement [ , DeclarationStatement ] ) { [ Statement ] }
+    - ( ) -> ... [ , ...] { [ Statement ] }
+    - (DeclarationStatement [ , DeclarationStatement ]) -> ... [ , ...] { [ Statement ] }
+    FunctionTypeExpression :==
+    - ( ) -> ... [ , ...]
+    - (DeclarationStatement [ , DeclarationStatement ]) -> ... [ , ...]
+
+----------- 
+possible rule:
+    when you encounter '{', don't expect a ';'
+
+----------- 
+possible rule:
+    parse semicolon to semicolon, only start using segments when you run into '{'

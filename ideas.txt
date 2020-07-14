@@ -1,0 +1,9 @@
+IDEAS:
+
+- aggressively const
+- easy to use and maintain initializer lists
+- lambdas
+
+- structs:
+   - make it easy to be anonymous
+   - allow child to change initializers
