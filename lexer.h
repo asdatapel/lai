@@ -1,3 +1,6 @@
+#pragma once
+
+#include <cctype>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -8,7 +11,7 @@ struct String
     char *data = nullptr;
     uint32_t length = 0;
 
-    bool equals(char *val)
+    bool equals(const char *val)
     {
         for (int i = 0; i < length; ++i)
         {

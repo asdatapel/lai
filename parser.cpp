@@ -1,119 +1,10 @@
 #include <vector>
 
+#include "llvm.h"
+
+#include "ast.h"
 #include "lexer.h"
-
-// forward decs
-struct Ast;
-struct Ast_Statement;
-struct Ast_Expression;
-struct Ast_VariableExpression;
-Ast_Expression *parseTerm(Lexer *);
-Ast_Expression *parseExpression(Lexer *);
-Ast_Statement *parseStatement(Lexer *);
-bool checkDeclaration(Lexer *);
-Ast_Statement *parseDeclaration(Lexer *);
-
-struct Ast
-{
-    std::vector<Ast_Statement *> statements;
-};
-
-struct Ast_Statement
-{
-    enum struct Type
-    {
-        EXPRESSION_STATEMENT,
-        DECLARATION_STATEMENT,
-        RETURN_STATEMENT,
-    };
-
-    Type type;
-};
-struct Ast_Expression
-{
-    enum struct Type
-    {
-        NUMBER_EXPRESSION,
-        LITERAL_EXPRESSION,
-        VARIABLE_EXPRESSION,
-        UNARY_OPERATION_EXPRESSION,
-        BINARY_OPERATION_EXPRESSION,
-        ASSIGNMENT_EXPRESSION,
-        FUNCTION_HEADER_EXPRESSION,
-        FUNCTION_DEFINITION_EXPRESSION,
-    };
-
-    Type type;
-};
-struct Ast_ExpressionStatement : Ast_Statement
-{
-    Ast_ExpressionStatement() { type = Type::EXPRESSION_STATEMENT; };
-
-    Ast_Expression *value;
-};
-struct Ast_DeclarationStatement : Ast_Statement
-{
-    Ast_DeclarationStatement() { type = Type::DECLARATION_STATEMENT; };
-
-    bool constant;
-    std::vector<Ast_VariableExpression *> identifiers;
-    Ast_Expression *explicitType;
-    Ast_Expression *value;
-};
-struct Ast_ReturnStatement : Ast_Statement
-{
-    Ast_ReturnStatement() { type = Type::RETURN_STATEMENT; };
-
-    Ast_Expression *value;
-};
-struct Ast_NumberExpression : Ast_Expression
-{
-    Ast_NumberExpression() { type = Type::NUMBER_EXPRESSION; };
-
-    double number;
-};
-struct Ast_VariableExpression : Ast_Expression
-{
-    Ast_VariableExpression() { type = Type::VARIABLE_EXPRESSION; };
-
-    String identifier;
-};
-struct Ast_AssignmentExpression : Ast_Expression
-{
-    Ast_AssignmentExpression() { type = Type::ASSIGNMENT_EXPRESSION; };
-
-    Ast_Expression *lhs;
-    Ast_Expression *rhs;
-};
-struct Ast_UnaryOperatorExpression : Ast_Expression
-{
-    Ast_UnaryOperatorExpression() { type = Type::UNARY_OPERATION_EXPRESSION; };
-
-    char operatorSymbol = 0;
-    Ast_Expression *operand;
-};
-struct Ast_BinaryOperatorExpression : Ast_Expression
-{
-    Ast_BinaryOperatorExpression() { type = Type::BINARY_OPERATION_EXPRESSION; };
-
-    char operatorSymbol = 0;
-    Ast_Expression *leftOperand;
-    Ast_Expression *rightOperand;
-};
-struct Ast_FunctionHeaderExpression : Ast_Expression
-{
-    Ast_FunctionHeaderExpression() { type = Type::FUNCTION_HEADER_EXPRESSION; };
-
-    std::vector<Ast_Statement *> parameters;
-    Ast_Expression *returnType;
-};
-struct Ast_FunctionDefinitionExpression : Ast_Expression
-{
-    Ast_FunctionDefinitionExpression() { type = Type::FUNCTION_DEFINITION_EXPRESSION; };
-
-    Ast_FunctionHeaderExpression *header;
-    Ast *body;
-};
+#include "types.h"
 
 Ast *parseAst(Lexer *lexer)
 {
@@ -122,13 +13,12 @@ Ast *parseAst(Lexer *lexer)
     auto token = lexer->peek_next();
     while (token.type != Lexer::TokenType::T_EOF && token.type != static_cast<Lexer::TokenType>('}'))
     {
-        auto st = parseStatement(lexer);
+        auto st = parseStatement(lexer, ast);
         ast->statements.push_back(st);
 
         if (lexer->peek_next().type != static_cast<Lexer::TokenType>(';'))
         {
             // @VALIDATE error
-            std::cout << "error 131" << std::endl;
         }
 
         lexer->next(); // eat ';'
@@ -138,7 +28,7 @@ Ast *parseAst(Lexer *lexer)
     return ast;
 }
 
-Ast_Statement *parseStatement(Lexer *lexer)
+Ast_Statement *parseStatement(Lexer *lexer, Ast *ast)
 {
     Ast_Statement *statement = nullptr;
 
@@ -156,7 +46,7 @@ Ast_Statement *parseStatement(Lexer *lexer)
     {
         lexer->next(); // eat 'return'
 
-        auto exp = parseExpression(lexer);
+        auto exp = parseExpression(lexer, ast);
 
         auto st = new Ast_ReturnStatement;
         st->value = exp;
@@ -168,11 +58,11 @@ Ast_Statement *parseStatement(Lexer *lexer)
     {
         if (checkDeclaration(lexer))
         {
-            statement = parseDeclaration(lexer);
+            statement = parseDeclaration(lexer, ast);
         }
         else
         {
-            auto exp = parseExpression(lexer);
+            auto exp = parseExpression(lexer, ast);
             if (exp)
             {
                 auto st = new Ast_ExpressionStatement;
@@ -195,7 +85,7 @@ bool checkDeclaration(Lexer *lexer)
             nextNextToken.type == static_cast<Lexer::TokenType>(','));
 };
 
-Ast_Statement *parseDeclaration(Lexer *lexer)
+Ast_Statement *parseDeclaration(Lexer *lexer, Ast *ast)
 {
     auto token = lexer->peek_next();
     auto st = new Ast_DeclarationStatement;
@@ -226,10 +116,9 @@ Ast_Statement *parseDeclaration(Lexer *lexer)
     if (token.type != static_cast<Lexer::TokenType>(':'))
     {
         // @VALIDATE error
-        std::cout << "error229" << std::endl;
     }
     lexer->next(); // eat ':'
-    st->explicitType = parseExpression(lexer);
+    st->explicitType = parseTerm(lexer, ast);
 
     token = lexer->peek_next();
 
@@ -238,13 +127,13 @@ Ast_Statement *parseDeclaration(Lexer *lexer)
         st->constant = (token.type == static_cast<Lexer::TokenType>(':'));
         lexer->next(); // eat ':' or '='
 
-        st->value = parseExpression(lexer);
+        st->value = parseExpression(lexer, ast);
     }
 
     return st;
 };
 
-Ast_Expression *parseTerm(Lexer *lexer)
+Ast_Expression *parseTerm(Lexer *lexer, Ast *ast)
 {
     auto token = lexer->peek_next();
     switch (token.type)
@@ -255,7 +144,7 @@ Ast_Expression *parseTerm(Lexer *lexer)
         lexer->next(); // eat '('
 
         std::vector<Ast_Statement *> statements;
-        auto firstStatement = parseStatement(lexer);
+        auto firstStatement = parseStatement(lexer, ast);
         if (firstStatement)
         {
             statements.push_back(firstStatement);
@@ -263,7 +152,7 @@ Ast_Expression *parseTerm(Lexer *lexer)
             while (lexer->peek_next().type == static_cast<Lexer::TokenType>(','))
             {
                 lexer->next(); // eat ','
-                statements.push_back(parseStatement(lexer));
+                statements.push_back(parseStatement(lexer, ast));
             }
         }
 
@@ -284,7 +173,7 @@ Ast_Expression *parseTerm(Lexer *lexer)
 
             auto exp = new Ast_FunctionHeaderExpression;
             exp->parameters = statements;
-            exp->returnType = parseExpression(lexer);
+            exp->returnType = parseExpression(lexer, ast);
 
             if (lexer->peek_next().type == static_cast<Lexer::TokenType>('{'))
             {
@@ -293,6 +182,7 @@ Ast_Expression *parseTerm(Lexer *lexer)
                 auto funcDef = new Ast_FunctionDefinitionExpression;
                 funcDef->header = exp;
                 funcDef->body = parseAst(lexer);
+                funcDef->body->parent = ast;
 
                 // @VALIDATE next token should be }
                 lexer->next(); // eat '}'
@@ -324,6 +214,15 @@ Ast_Expression *parseTerm(Lexer *lexer)
         return exp;
     }
     break;
+    case Lexer::TokenType::T_STRING_LITERAL:
+    {
+        lexer->next(); // eat string
+
+        auto exp = new Ast_LiteralExpression;
+        exp->value = token.stringVal;
+        return exp;
+    }
+    break;
     case Lexer::TokenType::T_IDENTIFIER:
     {
         lexer->next(); // eat identifier
@@ -339,7 +238,7 @@ Ast_Expression *parseTerm(Lexer *lexer)
 
         auto exp = new Ast_UnaryOperatorExpression;
         exp->operatorSymbol = static_cast<char>(token.type);
-        exp->operand = parseExpression(lexer);
+        exp->operand = parseExpression(lexer, ast);
 
         return exp;
     }
@@ -349,20 +248,45 @@ Ast_Expression *parseTerm(Lexer *lexer)
     return nullptr;
 };
 
-Ast_Expression *parseExpression(Lexer *lexer)
+Ast_Expression *parseExpression(Lexer *lexer, Ast *ast)
 {
-    auto firstTerm = parseTerm(lexer);
+    auto firstTerm = parseTerm(lexer, ast);
     if (!firstTerm)
         return nullptr;
 
     auto token = lexer->peek_next();
     switch (token.type)
     {
+    case static_cast<Lexer::TokenType>('('): // function call
+    {
+        lexer->next(); // eat '('
+
+        auto exp = new Ast_FunctionCallExpression;
+        exp->function = static_cast<Ast_VariableExpression*>(firstTerm);
+
+        token = lexer->peek_next();
+        while (token.type != static_cast<Lexer::TokenType>(')'))
+        {
+            exp->arguments.push_back(parseExpression(lexer, ast));
+
+            token = lexer->peek_next();
+            if (token.type == static_cast<Lexer::TokenType>(','))
+            {
+                lexer->next();
+                token = lexer->peek_next();
+            }
+        }
+
+        lexer->next(); // eat ')'
+        
+        return exp;
+    }
+    break;
     case static_cast<Lexer::TokenType>('='):
     {
         lexer->next(); // eat '='
 
-        auto rhs = parseExpression(lexer);
+        auto rhs = parseExpression(lexer, ast);
 
         auto exp = new Ast_AssignmentExpression;
         exp->lhs = firstTerm;
@@ -378,7 +302,7 @@ Ast_Expression *parseExpression(Lexer *lexer)
         auto exp = new Ast_BinaryOperatorExpression;
         exp->leftOperand = firstTerm;
         exp->operatorSymbol = static_cast<char>(token.type);
-        exp->rightOperand = parseExpression(lexer);
+        exp->rightOperand = parseExpression(lexer, ast);
 
         return exp;
     }
@@ -431,7 +355,7 @@ std::string printExpression(Ast_Expression *expression, int depth)
         std::string params = "[";
         for (auto p : exp->parameters)
         {
-            params += printStatement(p, depth + 1)+ ",";
+            params += printStatement(p, depth + 1) + ",";
         }
         params += "]";
 
@@ -495,7 +419,7 @@ std::string printStatement(Ast_Statement *statement, int depth)
         std::string identifiers = "[";
         for (auto i : st->identifiers)
         {
-            identifiers += "\"" +  i->identifier.toString() + "\",";
+            identifiers += "\"" + i->identifier.toString() + "\",";
         }
         identifiers += "]";
 
@@ -533,12 +457,22 @@ int main(int argc, char *argv[])
     Lexer lexer(argv[1]);
 
     auto ast = parseAst(&lexer);
+    resolveTypes(ast);
 
-    std::cout << ast->statements.size() << std::endl;
+    //std::cout << ast->statements.size() << std::endl;
     for (auto s : ast->statements)
     {
-        std::cout << printStatement(s, 0) << std::endl;
+        //std::cout << printStatement(s, 0) << std::endl;
     }
+
+    //std::cout << "\n\n\n\n\n";
+    for (auto x : ast->declarations)
+    {
+        //std::cout << x.first << ", " << x.second << std::endl;
+    }
+
+    //std::cout << "\n\n\n\n\n";
+    codegenModule(ast);
 
     // auto token = lexer.peek_next();
     // std::cout << "LEN: " << lexer.contents.length << "\n";

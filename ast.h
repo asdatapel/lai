@@ -1,120 +1,142 @@
-#include <string>
+#pragma once
 
-struct Lexer;
+#include <map>
+#include <vector>
 
+#include <llvm/IR/IRBuilder.h>
+
+#include "lexer.h"
+
+// forward decs
 struct Ast;
-struct Ast_DeclarationStatement;
+struct Ast_Statement;
+struct Ast_Expression;
+struct Ast_VariableExpression;
+Ast_Expression *parseTerm(Lexer *, Ast *ast);
+Ast_Expression *parseExpression(Lexer *, Ast *ast);
+Ast_Statement *parseStatement(Lexer *, Ast *ast);
+bool checkDeclaration(Lexer *);
+Ast_Statement *parseDeclaration(Lexer *, Ast *ast);
 
-struct Ast_Type : Ast_Expression
+struct Type_Base;
+
+struct Ast
 {
-};
+    Ast *parent = nullptr;
+    std::vector<Ast_Statement *> statements;
 
-struct Ast_FunctionType : Ast_Type
-{
-    std::vector<Ast_DeclarationStatement *> parameters = {};
-    std::string returnType;
-
-    static Ast_FunctionType *parse(Lexer *lexer);
-    static Ast_FunctionType *parse(Lexer *lexer, std::string firstIdentifier); // overload for when we have already passed the first identifier and are on the first ':'
-
-    std::string print() override;
-};
-
-struct Ast_Expression
-{
-    static Ast_Expression *parse(Lexer *lexer);
-
-    virtual std::string print() { return ""; };
-};
-struct Ast_ParensExpression : Ast_Expression
-{
-    static Ast_Expression *parse(Lexer *lexer);
-};
-struct Ast_FunctionDefinitionExpression : Ast_Expression
-{
-    Ast_FunctionType *type;
-    Ast *body = NULL;
-
-    static Ast_FunctionDefinitionExpression *parse(Lexer *lexer, std::string firstIdentifier); // overload for when we have already passed the first identifier and are on the first ':'
-
-    std::string print() override;
-};
-struct Ast_NumberExpression : Ast_Expression
-{
-    double number = 0.0;
-
-    static Ast_NumberExpression *parse(Lexer *lexer);
-
-    std::string print() override { return " Ast_NumberExpression { " + std::to_string(number) + " }"; };
-};
-struct Ast_VarReferenceExpression : Ast_Expression
-{
-    std::string name = "";
-
-    // @unused
-    // static Ast_NumberExpression *parse(Lexer *lexer);
-
-    std::string print() override { return " Ast_VarReferenceExpression : { " + name + " }"; };
-};
-struct Ast_BinaryPlusExpression : Ast_Expression
-{
-    Ast_Expression *lhs = NULL, *rhs = NULL;
-
-    // @unused
-    // static Ast_NumberExpression *parse(Lexer *lexer);
-
-    std::string print() override { return " Ast_BinaryPlusExpression : { " + lhs->print() + ", " + rhs->print() + " }"; };
+    std::map<std::string, llvm::Value*> declarations;
 };
 
 struct Ast_Statement
 {
-    static Ast_Statement *parse(Lexer *lexer);
+    enum struct Type
+    {
+        EXPRESSION_STATEMENT,
+        DECLARATION_STATEMENT,
+        RETURN_STATEMENT,
+    };
 
-    virtual std::string print() { return ""; };
+    Type type;
 };
+struct Ast_ExpressionStatement : Ast_Statement
+{
+    Ast_ExpressionStatement() { type = Type::EXPRESSION_STATEMENT; };
 
+    Ast_Expression *value = nullptr;
+};
 struct Ast_DeclarationStatement : Ast_Statement
 {
-    std::string identifier = "";
-    std::string type = ""; // blank means the type should be implicit
-    Ast_Expression *value = NULL;
-    bool constant = false;
+    Ast_DeclarationStatement() { type = Type::DECLARATION_STATEMENT; };
 
-    static Ast_DeclarationStatement *parse(Lexer *lexer);
-    static Ast_DeclarationStatement *parse(Lexer *lexer, std::string identifier); // overload for when we have already passed the identifier and are on the ':'
-    std::string print() override { return " Ast_DeclarationStatement : { " + identifier + ", " + type + ", " + (value ? value->print() : "uninitialized") + ", " + std::to_string(constant) + " }"; };
+    bool constant;
+    std::vector<Ast_VariableExpression *> identifiers;
+    Ast_Expression *explicitType = nullptr;
+    Ast_Expression *value = nullptr;
+};
+struct Ast_ReturnStatement : Ast_Statement
+{
+    Ast_ReturnStatement() { type = Type::RETURN_STATEMENT; };
+
+    Ast_Expression *value = nullptr;
 };
 
-struct Ast_AssignmentStatement : public Ast_Statement
+struct Ast_Expression
 {
-    std::string identifier = "";
-    Ast_Expression *value = NULL;
-
-    static Ast_AssignmentStatement *parse(Lexer *lexer, std::string identifier);
-    std::string print() override { return " Ast_AssignmentStatement : { " + identifier + ", " + value->print() + " }"; };
-};
-
-struct Ast_ReturnStatement : public Ast_Statement
-{
-    Ast_Expression *value = NULL;
-
-    static Ast_ReturnStatement *parse(Lexer *lexer);
-    std::string print() override { return " Ast_ReturnStatement : { " + value->print() + " }"; };
-};
-
-struct Ast // represents a scope??
-{
-    std::vector<Ast_Statement *> statements = {};
-
-    static Ast *parse(Lexer *lexer);
-    std::string print()
+    enum struct Type
     {
-        std::string ret;
-        for (auto s : statements)
-        {
-            ret += s->print() + '\n';
-        }
-
-        return ret;
+        NUMBER_EXPRESSION,
+        LITERAL_EXPRESSION,
+        VARIABLE_EXPRESSION,
+        UNARY_OPERATION_EXPRESSION,
+        BINARY_OPERATION_EXPRESSION,
+        ASSIGNMENT_EXPRESSION,
+        FUNCTION_HEADER_EXPRESSION,
+        FUNCTION_DEFINITION_EXPRESSION,
+        FUNCTION_CALL_EXPRESSION,
     };
+
+    Type type;
+    Type_Base *expressionType = nullptr;
+};
+struct Ast_NumberExpression : Ast_Expression
+{
+    Ast_NumberExpression() { type = Type::NUMBER_EXPRESSION; };
+
+    double number = 0;
+};
+struct Ast_LiteralExpression : Ast_Expression
+{
+    Ast_LiteralExpression() { type = Type::LITERAL_EXPRESSION; };
+
+    String value;
+};
+struct Ast_VariableExpression : Ast_Expression
+{
+    Ast_VariableExpression() { type = Type::VARIABLE_EXPRESSION; };
+
+    String identifier;
+};
+struct Ast_AssignmentExpression : Ast_Expression
+{
+    Ast_AssignmentExpression() { type = Type::ASSIGNMENT_EXPRESSION; };
+
+    Ast_Expression *lhs = nullptr;
+    Ast_Expression *rhs = nullptr;
+};
+struct Ast_UnaryOperatorExpression : Ast_Expression
+{
+    Ast_UnaryOperatorExpression() { type = Type::UNARY_OPERATION_EXPRESSION; };
+
+    char operatorSymbol = 0;
+    Ast_Expression *operand = nullptr;
+};
+struct Ast_BinaryOperatorExpression : Ast_Expression
+{
+    Ast_BinaryOperatorExpression() { type = Type::BINARY_OPERATION_EXPRESSION; };
+
+    char operatorSymbol = 0;
+    Ast_Expression *leftOperand = nullptr;
+    Ast_Expression *rightOperand = nullptr;
+};
+struct Ast_FunctionHeaderExpression : Ast_Expression
+{
+    Ast_FunctionHeaderExpression() { type = Type::FUNCTION_HEADER_EXPRESSION; };
+
+    std::vector<Ast_Statement *> parameters;
+    Ast_Expression *returnType = nullptr;
+};
+struct Ast_FunctionDefinitionExpression : Ast_Expression
+{
+    Ast_FunctionDefinitionExpression() { type = Type::FUNCTION_DEFINITION_EXPRESSION; };
+
+    Ast_FunctionHeaderExpression *header = nullptr;
+    Ast *body = nullptr;
+};
+struct Ast_FunctionCallExpression : Ast_Expression
+{
+    Ast_FunctionCallExpression() { type = Type::FUNCTION_CALL_EXPRESSION; };
+
+    Ast_VariableExpression *function = nullptr;
+    std::vector<Ast_Expression*> arguments;
 };
