@@ -2,19 +2,20 @@ a := 32;
 b : int;
 c : sint = 24;
 
-b = 2;
+header : (f1: int, f2: int) -> sint;
 
 fun :: (f1: int, f2: int) -> sint {
     internal :: (s: sint) -> sint {
         return s + 1;
     };
     
-    i1 := 3;
+    i1 := f2 + f1 - 3;
     i4 := i1;
-    printffunc("%f", i1);
+    printffunc("%f,\n", i1);
     return internal(f1);
 };
 
 d := fun(23, 33);
+fun(44, 56);
 str := "asdasdasdasd";
-printffunc("%s", str);
+printffunc("%f, ", b);

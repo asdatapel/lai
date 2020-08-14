@@ -5,18 +5,13 @@
 
 #include <llvm/IR/IRBuilder.h>
 
-#include "lexer.h"
+#include "token_list.h"
 
 // forward decs
 struct Ast;
 struct Ast_Statement;
 struct Ast_Expression;
 struct Ast_VariableExpression;
-Ast_Expression *parseTerm(Lexer *, Ast *ast);
-Ast_Expression *parseExpression(Lexer *, Ast *ast);
-Ast_Statement *parseStatement(Lexer *, Ast *ast);
-bool checkDeclaration(Lexer *);
-Ast_Statement *parseDeclaration(Lexer *, Ast *ast);
 
 struct Type_Base;
 
@@ -89,13 +84,13 @@ struct Ast_LiteralExpression : Ast_Expression
 {
     Ast_LiteralExpression() { type = Type::LITERAL_EXPRESSION; };
 
-    String value;
+    Segment value;
 };
 struct Ast_VariableExpression : Ast_Expression
 {
     Ast_VariableExpression() { type = Type::VARIABLE_EXPRESSION; };
 
-    String identifier;
+    Segment identifier;
 };
 struct Ast_AssignmentExpression : Ast_Expression
 {
@@ -123,7 +118,7 @@ struct Ast_FunctionHeaderExpression : Ast_Expression
 {
     Ast_FunctionHeaderExpression() { type = Type::FUNCTION_HEADER_EXPRESSION; };
 
-    std::vector<Ast_Statement *> parameters;
+    std::vector<Ast_DeclarationStatement *> parameters;
     Ast_Expression *returnType = nullptr;
 };
 struct Ast_FunctionDefinitionExpression : Ast_Expression
