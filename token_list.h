@@ -22,4 +22,8 @@ struct TokenList
     {
         currentIndex++;
     }
+    void eat(uint32_t count)
+    {
+        currentIndex += count;
+    }
 };

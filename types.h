@@ -77,7 +77,7 @@
 //     {
 //         switch (statement->type)
 //         {
-//         case Ast_Statement::Type::DECLARATION_STATEMENT:
+//         case Ast_Statement::Type::DECLARATION:
 //         {
 //             auto st = (Ast_DeclarationStatement *)statement;
 //             if (!st->explicitType && !st->value)
@@ -104,11 +104,11 @@
 //             // ast->declarations[declaration->name.toString()] = declaration;
 //         }
 //         break;
-//         case Ast_Statement::Type::RETURN_STATEMENT:
+//         case Ast_Statement::Type::RETURN:
 //         {
 //         }
 //         break;
-//         case Ast_Statement::Type::EXPRESSION_STATEMENT:
+//         case Ast_Statement::Type::EXPRESSION:
 //         {
 //         }
 //         break;
@@ -143,7 +143,7 @@
 //         exp->expressionType = t;
 //     }
 //     break;
-//     case Ast_Expression::Type::VARIABLE_EXPRESSION:
+//     case Ast_Expression::Type::VARIABLE:
 //     {
 //         // lookup name
 //         auto exp = (Ast_VariableExpression *)expression;
@@ -155,7 +155,7 @@
 //         // exp->expressionType = scope->declarations[exp->identifier.toString()]->type;
 //     }
 //     break;
-//     case Ast_Expression::Type::UNARY_OPERATION_EXPRESSION:
+//     case Ast_Expression::Type::UNARY_OPERATION:
 //     {
 //         // assuming no unary operators will change type ???????
 //         auto exp = (Ast_UnaryOperatorExpression *)expression;
@@ -163,7 +163,7 @@
 //         expression->expressionType = exp->operand->expressionType;
 //     }
 //     break;
-//     case Ast_Expression::Type::BINARY_OPERATION_EXPRESSION:
+//     case Ast_Expression::Type::BINARY_OPERATION:
 //     {
 //         // temprorary assumption that no binary operator will change type ???????
 //         auto exp = (Ast_BinaryOperatorExpression *)expression;
@@ -172,7 +172,7 @@
 //         expression->expressionType = exp->leftOperand->expressionType;
 //     }
 //     break;
-//     case Ast_Expression::Type::ASSIGNMENT_EXPRESSION:
+//     case Ast_Expression::Type::ASSIGNMENT:
 //     {
 //         auto exp = (Ast_AssignmentExpression *)expression;
 //         resolveTypeForExpression(exp->lhs, scope);
@@ -180,11 +180,11 @@
 //         expression->expressionType = exp->lhs->expressionType;
 //     }
 //     break;
-//     case Ast_Expression::Type::FUNCTION_HEADER_EXPRESSION:
+//     case Ast_Expression::Type::FUNCTION_HEADER:
 //     {
 //     }
 //     break;
-//     case Ast_Expression::Type::FUNCTION_DEFINITION_EXPRESSION:
+//     case Ast_Expression::Type::FUNCTION_DEFINITION:
 //     {
 //         auto exp = (Ast_FunctionDefinitionExpression *)expression;
 //     }
@@ -199,7 +199,7 @@
 //         return nullptr;
 //     }
 
-//     if (expression->type == Ast_Expression::Type::VARIABLE_EXPRESSION)
+//     if (expression->type == Ast_Expression::Type::VARIABLE)
 //     {
 //         auto exp = (Ast_VariableExpression *)expression;
 

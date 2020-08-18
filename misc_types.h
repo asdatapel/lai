@@ -7,6 +7,21 @@ struct Segment
     char *data = nullptr;
     uint32_t length = 0;
 
+    bool equals(Segment &other)
+    {
+        if (length != other.length){
+            return false;
+        }
+        
+        for (int i = 0; i < length; ++i)
+        {
+            if (data[i] != other.data[i])
+                return false;
+        }
+
+        return true;
+    };
+
     bool equals(const char *val)
     {
         for (int i = 0; i < length; ++i)
@@ -94,7 +109,8 @@ enum struct TokenType
     T_UNKNOWN = 256,
 
     T_IDENTIFIER,
-    T_NUMBER,
+    T_INTEGER_LITERAL,
+    T_FLOAT_LITERAL,
     T_STRING_LITERAL,
 
     T_COMPILER_DIRECTIVE,
@@ -112,5 +128,6 @@ struct Token
 
     Segment identifier;
     Segment stringVal;
+    long long intVal;
     double doubleVal;
 };

@@ -6,11 +6,12 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include "debug_util.h"
 #include "ir.h"
 
 void codegenModule(IrContainer *);
 void codegenValue(IrInstr *, IrContainer *, llvm::BasicBlock *, llvm::Module &);
-llvm::Function * codegenFunction(IrFunction *, llvm::Module &);
+llvm::Function *codegenFunction(IrFunction *, llvm::Module &);
 llvm::Type *toLlvmVarType(LaiType *, llvm::LLVMContext &);
 llvm::FunctionType *toLlvmFunctionType(LaiType *, llvm::LLVMContext &);
 
@@ -23,7 +24,7 @@ void codegenModule(IrContainer *irContainer)
 
     ////temp main function////
     //////////////////////////
-    llvm::FunctionType *mainType = llvm::FunctionType::get(llvm::Type::getVoidTy(llvmContext), {}, false);
+    llvm::FunctionType *mainType = llvm::FunctionType::get(llvm::Type::getInt32Ty(llvmContext), {}, false);
     llvm::Function *mainFunction = module.getFunction("main");
     mainFunction = llvm::Function::Create(
         mainType,
@@ -61,12 +62,19 @@ void codegenModule(IrContainer *irContainer)
         codegenValue(instr, irContainer, entryBlock, module);
     }
 
-    // dump llvm ir to stdout
+    ////temp main function////
+    //////////////////////////
+    auto lastDec = irContainer->declarations[irContainer->declarations.size() - 1]->llvmValue;
+    auto load = new llvm::LoadInst(lastDec, "", false, entryBlock);
+    llvm::ReturnInst::Create(module.getContext(), load, entryBlock);
+    //////////////////////////
+
+    // dump llvm ir to file
     std::string Str;
     llvm::raw_string_ostream OS(Str);
     OS << module;
     OS.flush();
-    std::cout << Str << std::endl;
+    write_to_file("foo.ll", Str);
 };
 
 void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *block, llvm::Module &module)
@@ -78,16 +86,31 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
 
     switch (instr->type)
     {
-    case IrInstr::Type::CONSTANT:
+    case IrInstr::Type::INTEGER_LITERAL:
     {
-        auto irConstant = (IrConstant *)instr;
-        irConstant->llvmValue = llvm::ConstantInt::get(module.getContext(), llvm::APInt(32, irConstant->value, true));
+        auto irInteger = (IrIntegerLiteral *)instr;
+        irInteger->llvmValue = llvm::ConstantInt::get(module.getContext(), llvm::APInt(32, irInteger->value, true));
     }
     break;
     case IrInstr::Type::FUNCTION:
     {
         auto irFunction = (IrFunction *)instr;
         instr->llvmValue = codegenFunction(irFunction, module);
+    }
+    break;
+    case IrInstr::Type::FUNCTION_CALL:
+    {
+        auto irFunctionCall = (IrFunctionCall *)instr;
+
+        std::vector<llvm::Value *> args;
+        for (auto a : irFunctionCall->arguments)
+        {
+            codegenValue(a, irContainer, block, module);
+            args.push_back(a->llvmValue);
+        }
+
+        codegenValue(irFunctionCall->function, irContainer, block, module);
+        instr->llvmValue = llvm::CallInst::Create(irFunctionCall->function->llvmValue, args, "", block);
     }
     break;
     case IrInstr::Type::ADD:
@@ -104,6 +127,13 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
         codegenValue(irSub->lhs, irContainer, block, module);
         codegenValue(irSub->rhs, irContainer, block, module);
         instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Sub, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "sub", block);
+    }
+    break;
+    case IrInstr::Type::LOAD:
+    {
+        auto irLoad = (IrLoad *)instr;
+        codegenValue(irLoad->value, irContainer, block, module);
+        instr->llvmValue = new llvm::LoadInst(irLoad->value->llvmValue, "", false, block);
     }
     break;
     case IrInstr::Type::STORE:
@@ -127,7 +157,7 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
     };
 };
 
-llvm::Function * codegenFunction(IrFunction *irFunction, llvm::Module &module)
+llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
 {
     ////////////
     //temp function naming
@@ -136,7 +166,7 @@ llvm::Function * codegenFunction(IrFunction *irFunction, llvm::Module &module)
     std::string name = "_func_" + std::to_string(i);
     ////////////
 
-    llvm::FunctionType *llvmFuntionType = toLlvmFunctionType(irFunction->functionType, module.getContext());
+    llvm::FunctionType *llvmFuntionType = toLlvmFunctionType(irFunction->laiType, module.getContext());
     llvm::Function *llvmFunction = module.getFunction(name);
     llvmFunction = llvm::Function::Create(
         llvmFuntionType,
@@ -145,11 +175,22 @@ llvm::Function * codegenFunction(IrFunction *irFunction, llvm::Module &module)
         module);
     llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(module.getContext(), "entry", llvmFunction, 0);
 
+    for (int i = 0; i < irFunction->parameters.size(); i++)
+    {
+        auto parameter = irFunction->parameters[i];
+        auto llvmType = toLlvmVarType(parameter->laiType, module.getContext());
+        parameter->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
+        new llvm::StoreInst(llvmFunction->getArg(i), parameter->llvmValue, false, entryBlock);
+    }
+
     auto irContainer = irFunction->container;
     for (auto declaration : irContainer->declarations)
     {
-        auto llvmType = toLlvmVarType(declaration->laiType, module.getContext());
-        declaration->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
+        if (!declaration->llvmValue)
+        {
+            auto llvmType = toLlvmVarType(declaration->laiType, module.getContext());
+            declaration->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
+        }
     }
 
     for (auto instr : irContainer->body)
@@ -180,6 +221,8 @@ llvm::Type *toLlvmVarType(LaiType *type, llvm::LLVMContext &context)
     }
     break;
     }
+
+    return nullptr;
 }
 
 llvm::FunctionType *toLlvmFunctionType(LaiType *type, llvm::LLVMContext &context)
@@ -202,4 +245,6 @@ llvm::FunctionType *toLlvmFunctionType(LaiType *type, llvm::LLVMContext &context
         // @VALIDATE error
         break;
     }
+
+    return nullptr;
 }

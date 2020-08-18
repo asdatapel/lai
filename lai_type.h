@@ -60,7 +60,7 @@ static LaiType_Integer builtinTypeI32(32, false);
 static LaiType_Integer builtinTypeS32(32, true);
 //////////////////////////////////////
 
-LaiType *resolveBuiltinType(Segment identifier)
+LaiType *parseBuiltinType(Segment identifier)
 {
     if (identifier.equals("i32"))
     {

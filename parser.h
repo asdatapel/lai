@@ -164,11 +164,20 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
         return exp;
     }
     break;
-    case TokenType::T_NUMBER:
+    case TokenType::T_INTEGER_LITERAL:
     {
         tokenList->eat(); // eat number
 
-        auto exp = new Ast_NumberExpression;
+        auto exp = new Ast_IntegerLiteralExpression;
+        exp->number = token.intVal;
+        return exp;
+    }
+    break;
+    case TokenType::T_FLOAT_LITERAL:
+    {
+        tokenList->eat(); // eat number
+
+        auto exp = new Ast_FloatingPointLiteralExpression;
         exp->number = token.doubleVal;
         return exp;
     }
@@ -177,7 +186,7 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
     {
         tokenList->eat(); // eat string
 
-        auto exp = new Ast_LiteralExpression;
+        auto exp = new Ast_StringLiteralExpression;
         exp->value = token.stringVal;
         return exp;
     }
@@ -192,7 +201,28 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
     }
     break;
     }
-    
+
+    if (token.type == static_cast<TokenType>('-'))
+    {
+        auto nextToken = tokenList->peek(1);
+        if (nextToken.type == TokenType::T_INTEGER_LITERAL)
+        {
+            tokenList->eat(2); // eat '-' and number
+
+            auto exp = new Ast_IntegerLiteralExpression;
+            exp->number = -nextToken.intVal;
+            return exp;
+        }
+        if (nextToken.type == TokenType::T_FLOAT_LITERAL)
+        {
+            tokenList->eat(2); // eat '-' and number
+
+            auto exp = new Ast_FloatingPointLiteralExpression;
+            exp->number = nextToken.doubleVal;
+            return exp;
+        }
+    }
+
     if (isUnaryOperator(token.type))
     {
         tokenList->eat(); // eat operator
@@ -221,7 +251,7 @@ Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
         tokenList->eat(); // eat '('
 
         auto exp = new Ast_FunctionCallExpression;
-        exp->function = static_cast<Ast_VariableExpression *>(firstTerm);
+        exp->function = firstTerm;
 
         token = tokenList->peek_next();
         while (token.type != static_cast<TokenType>(')'))
@@ -317,7 +347,6 @@ Ast_Expression *parseFunction(TokenList *tokenList, Ast *ast)
         auto definition = new Ast_FunctionDefinitionExpression;
         definition->header = header;
         definition->body = parseAst(tokenList);
-        definition->body->parent = ast;
 
         // @VALIDATE next token should be }
         tokenList->eat(); // eat '}'

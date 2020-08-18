@@ -28,7 +28,7 @@ std::string printExpression(Ast_Expression *expression, int depth)
 
     switch (expression->type)
     {
-    case Ast_Expression::Type::FUNCTION_DEFINITION_EXPRESSION:
+    case Ast_Expression::Type::FUNCTION_DEFINITION:
     {
         auto exp = (Ast_FunctionDefinitionExpression *)expression;
         std::string body = "[";
@@ -38,12 +38,12 @@ std::string printExpression(Ast_Expression *expression, int depth)
         }
         body += "]";
 
-        return "{ type : \"FUNCTION_DEFINITION_EXPRESSION\", header: " + printExpression(exp->header, depth + 1) +
+        return "{ type : \"FUNCTION_DEFINITION\", header: " + printExpression(exp->header, depth + 1) +
                ", body : " + body +
                "}";
     }
     break;
-    case Ast_Expression::Type::FUNCTION_HEADER_EXPRESSION:
+    case Ast_Expression::Type::FUNCTION_HEADER:
     {
         auto exp = (Ast_FunctionHeaderExpression *)expression;
         std::string params = "[";
@@ -53,44 +53,50 @@ std::string printExpression(Ast_Expression *expression, int depth)
         }
         params += "]";
 
-        return indent(depth) + "{ type : \"FUNCTION_HEADER_EXPRESSION\", params: " + params +
+        return indent(depth) + "{ type : \"FUNCTION_HEADER\", params: " + params +
                ", returnType: " + printExpression(exp->returnType, depth + 1) +
                "}";
     }
     break;
-    case Ast_Expression::Type::NUMBER_EXPRESSION:
+    case Ast_Expression::Type::INTEGER_LITERAL:
     {
-        auto exp = (Ast_NumberExpression *)expression;
+        auto exp = (Ast_IntegerLiteralExpression *)expression;
         return indent(depth) + "{ type : \"NUMBER_EXPRESSION\", value: " + std::to_string(exp->number) + "}";
     }
     break;
-    case Ast_Expression::Type::VARIABLE_EXPRESSION:
+    case Ast_Expression::Type::FLOATING_POINT_LITERAL:
     {
-        auto exp = (Ast_VariableExpression *)expression;
-        return indent(depth) + "{ type : \"VARIABLE_EXPRESSION\", identifier: \"" + exp->identifier.toString() + "\"}";
+        auto exp = (Ast_FloatingPointLiteralExpression *)expression;
+        return indent(depth) + "{ type : \"NUMBER_EXPRESSION\", value: " + std::to_string(exp->number) + "}";
     }
     break;
-    case Ast_Expression::Type::UNARY_OPERATION_EXPRESSION:
+    case Ast_Expression::Type::VARIABLE:
+    {
+        auto exp = (Ast_VariableExpression *)expression;
+        return indent(depth) + "{ type : \"VARIABLE\", identifier: \"" + exp->identifier.toString() + "\"}";
+    }
+    break;
+    case Ast_Expression::Type::UNARY_OPERATION:
     {
         auto exp = (Ast_UnaryOperatorExpression *)expression;
-        return indent(depth) + "{ type : \"UNARY_OPERATION_EXPRESSION\", operator: \"" + exp->operatorSymbol +
+        return indent(depth) + "{ type : \"UNARY_OPERATION\", operator: \"" + exp->operatorSymbol +
                "\", operand: " + printExpression(exp->operand, depth + 1) +
                "}";
     }
     break;
-    case Ast_Expression::Type::BINARY_OPERATION_EXPRESSION:
+    case Ast_Expression::Type::BINARY_OPERATION:
     {
         auto exp = (Ast_BinaryOperatorExpression *)expression;
-        return indent(depth) + "{ type : \"BINARY_OPERATION_EXPRESSION\", operator: \"" + exp->operatorSymbol +
+        return indent(depth) + "{ type : \"BINARY_OPERATION\", operator: \"" + exp->operatorSymbol +
                "\", left_operand: " + printExpression(exp->leftOperand, depth + 1) +
                ", right_operand: \n" + printExpression(exp->rightOperand, depth + 1) +
                "}";
     }
     break;
-    case Ast_Expression::Type::ASSIGNMENT_EXPRESSION:
+    case Ast_Expression::Type::ASSIGNMENT:
     {
         auto exp = (Ast_AssignmentExpression *)expression;
-        return indent(depth) + "{ type : \"ASSIGNMENT_EXPRESSION\", lhs: " + printExpression(exp->lhs, depth + 1) +
+        return indent(depth) + "{ type : \"ASSIGNMENT\", lhs: " + printExpression(exp->lhs, depth + 1) +
                ", rhs: " + printExpression(exp->rhs, depth + 1) +
                "}";
     }
@@ -107,7 +113,7 @@ std::string printStatement(Ast_Statement *statement, int depth)
 {
     switch (statement->type)
     {
-    case Ast_Statement::Type::DECLARATION_STATEMENT:
+    case Ast_Statement::Type::DECLARATION:
     {
         auto st = (Ast_DeclarationStatement *)statement;
         std::string identifiers = "[";
@@ -117,24 +123,24 @@ std::string printStatement(Ast_Statement *statement, int depth)
         }
         identifiers += "]";
 
-        return "{ type : \"DECLARATION_STATEMENT\", identifiers : " + identifiers +
+        return "{ type : \"DECLARATION\", identifiers : " + identifiers +
                ", explicitType: " + printExpression(st->explicitType, depth + 1) +
                ", value: " + printExpression(st->value, depth + 1) +
                ", isConstant: " + (st->constant ? "true" : "false") +
                "}";
     }
     break;
-    case Ast_Statement::Type::EXPRESSION_STATEMENT:
+    case Ast_Statement::Type::EXPRESSION:
     {
         auto st = (Ast_ExpressionStatement *)statement;
-        return "{ type : \"EXPRESSION_STATEMENT\", value: " + printExpression(st->value, depth) +
+        return "{ type : \"EXPRESSION\", value: " + printExpression(st->value, depth) +
                "}";
     }
     break;
-    case Ast_Statement::Type::RETURN_STATEMENT:
+    case Ast_Statement::Type::RETURN:
     {
         auto st = (Ast_ReturnStatement *)statement;
-        return "{ type : \"RETURN_STATEMENT\", value: " + printExpression(st->value, depth) +
+        return "{ type : \"RETURN\", value: " + printExpression(st->value, depth) +
                "}";
     }
     break;

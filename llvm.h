@@ -50,7 +50,7 @@
 //     {
 //         switch (statement->type)
 //         {
-//         case Ast_Statement::Type::DECLARATION_STATEMENT:
+//         case Ast_Statement::Type::DECLARATION:
 //         {
 //             auto st = (Ast_DeclarationStatement *)statement;
 
@@ -77,13 +77,13 @@
 //             }
 //         }
 //         break;
-//         case Ast_Statement::Type::RETURN_STATEMENT:
+//         case Ast_Statement::Type::RETURN:
 //         {
 //             // @VALIDATE not allowed, no can dooo
 //             // this validation should be redundant, it should have happened before the codegen stage
 //         }
 //         break;
-//         case Ast_Statement::Type::EXPRESSION_STATEMENT:
+//         case Ast_Statement::Type::EXPRESSION:
 //         {
 //             auto st = (Ast_ExpressionStatement *)statement;
 //             auto x = codegenExpression(st->value, ast);
@@ -104,7 +104,7 @@
 // {
 //     switch (statement->type)
 //     {
-//     case Ast_Statement::Type::DECLARATION_STATEMENT:
+//     case Ast_Statement::Type::DECLARATION:
 //     {
 //         auto st = (Ast_DeclarationStatement *)statement;
 
@@ -122,14 +122,14 @@
 //         }
 //     }
 //     break;
-//     case Ast_Statement::Type::RETURN_STATEMENT:
+//     case Ast_Statement::Type::RETURN:
 //     {
 //         auto st = (Ast_ReturnStatement *)statement;
 //         auto x = codegenExpression(st->value, ast);
 //         llvmBuilder.CreateRet(x);
 //     }
 //     break;
-//     case Ast_Statement::Type::EXPRESSION_STATEMENT:
+//     case Ast_Statement::Type::EXPRESSION:
 //     {
 //         auto st = (Ast_ExpressionStatement *)statement;
 //         auto x = codegenExpression(st->value, ast);
@@ -153,7 +153,7 @@
 //         return llvm::ConstantFP::get(llvmContext, llvm::APFloat(exp->number));
 //     }
 //     break;
-//     case Ast_Expression::Type::LITERAL_EXPRESSION:
+//     case Ast_Expression::Type::STRING_LITERAL:
 //     {
 //         auto exp = (Ast_LiteralExpression *)expression;
 //         std::string s = exp->value.toUnescapedString();
@@ -161,7 +161,7 @@
 //         return llvmBuilder.CreateGlobalStringPtr(llvm::StringRef(s));
 //     }
 //     break;
-//     case Ast_Expression::Type::VARIABLE_EXPRESSION:
+//     case Ast_Expression::Type::VARIABLE:
 //     {
 //         auto exp = (Ast_VariableExpression *)expression;
 //         auto val = findVariable(exp->identifier, ast);
@@ -172,11 +172,11 @@
 //         return val;
 //     }
 //     break;
-//     case Ast_Expression::Type::UNARY_OPERATION_EXPRESSION:
+//     case Ast_Expression::Type::UNARY_OPERATION:
 //     {
 //     }
 //     break;
-//     case Ast_Expression::Type::BINARY_OPERATION_EXPRESSION:
+//     case Ast_Expression::Type::BINARY_OPERATION:
 //     {
 //         // temprorary assumption that no binary operator will change type ???????
 //         auto exp = (Ast_BinaryOperatorExpression *)expression;
@@ -203,7 +203,7 @@
 //         }
 //     }
 //     break;
-//     case Ast_Expression::Type::ASSIGNMENT_EXPRESSION:
+//     case Ast_Expression::Type::ASSIGNMENT:
 //     {
 //         auto exp = (Ast_AssignmentExpression *)expression;
 
@@ -212,12 +212,12 @@
 //         // @TODO do the assignment!
 //     }
 //     break;
-//     case Ast_Expression::Type::FUNCTION_HEADER_EXPRESSION:
+//     case Ast_Expression::Type::FUNCTION_HEADER:
 //     {
 //         // maybe we dont generate code here, since function headers only appear as a type?
 //     }
 //     break;
-//     case Ast_Expression::Type::FUNCTION_DEFINITION_EXPRESSION:
+//     case Ast_Expression::Type::FUNCTION_DEFINITION:
 //     {
 //         static unsigned int counter = 0;
 //         counter += 1;
@@ -247,7 +247,7 @@
 //         return llvmFunction;
 //     }
 //     break;
-//     case Ast_Expression::Type::FUNCTION_CALL_EXPRESSION:
+//     case Ast_Expression::Type::FUNCTION_CALL:
 //     {
 //         auto exp = (Ast_FunctionCallExpression *)expression;
 

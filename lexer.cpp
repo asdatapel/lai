@@ -66,21 +66,31 @@ Token createTokenNumber(const Segment &file, uint32_t &currentIndex)
         currentIndex++;
     }
 
-    Token t;
-    t.type = TokenType::T_NUMBER;
-
-    ///////////////////////////////////////////////////////////////
-    // dumb way to make strtod work with non null-terminated string
-    ///////////////////////////////////////////////////////////////
-    static char tokenBuffer[1024] = {};
-    for (int i = 0; i < builder.length; ++i)
+    if (containsPeriod)
     {
-        tokenBuffer[i] = builder.data[i];
-    }
-    tokenBuffer[builder.length] = '\0';
-    t.doubleVal = strtod(tokenBuffer, NULL);
+        Token t;
+        t.type = TokenType::T_FLOAT_LITERAL;
 
-    return t;
+        ///////////////////////////////////////////////////////////////
+        // dumb way to make strtod work with non null-terminated string
+        ///////////////////////////////////////////////////////////////
+        static char tokenBuffer[1024] = {};
+        for (int i = 0; i < builder.length; ++i)
+        {
+            tokenBuffer[i] = builder.data[i];
+        }
+        tokenBuffer[builder.length] = '\0';
+        t.doubleVal = strtod(tokenBuffer, NULL);
+
+        return t;
+    }
+    else
+    {
+        Token t;
+        t.type = TokenType::T_INTEGER_LITERAL;
+        t.intVal = std::stoi(builder.toString());
+        return t;
+    }
 }
 
 Token createTokenCompilerDirective(const Segment &file, uint32_t &currentIndex)
@@ -194,11 +204,11 @@ Lexer::Lexer(std::string filename)
     fileData.copy(file.data, file.length, 0);
 
     Token t;
-    do {
+    do
+    {
         t = nextToken();
         tokens.push_back(t);
-    }
-    while (t.type != TokenType::T_EOF);
+    } while (t.type != TokenType::T_EOF);
 }
 
 TokenList Lexer::lexFile(std::string filename)
