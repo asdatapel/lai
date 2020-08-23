@@ -7,7 +7,7 @@
 enum struct LaiTypeType
 {
     UNKNOWN, // ERROR?
-    FLOATING_POINT,
+    FLOAT,
     INTEGER,
     FUNCTION,
     POINTER,
@@ -21,13 +21,20 @@ struct LaiType_Unknown : LaiType
 {
     LaiType_Unknown() { laiTypeType = LaiTypeType::UNKNOWN; };
 };
-struct LaiType_FloatingPoint : LaiType
+struct LaiType_Number : LaiType
 {
-    LaiType_FloatingPoint() { laiTypeType = LaiTypeType::FLOATING_POINT; };
-
-    uint8_t size = 0; // 32 or 64 only
+    uint8_t size = 0;
 };
-struct LaiType_Integer : LaiType
+struct LaiType_Float : LaiType_Number
+{
+    LaiType_Float() { laiTypeType = LaiTypeType::FLOAT; };
+    LaiType_Float(uint8_t size)
+    {
+        laiTypeType = LaiTypeType::FLOAT;
+        this->size = size;
+    };
+};
+struct LaiType_Integer : LaiType_Number
 {
     LaiType_Integer() { laiTypeType = LaiTypeType::INTEGER; };
     LaiType_Integer(uint8_t size, bool isSigned)
@@ -37,7 +44,6 @@ struct LaiType_Integer : LaiType
         this->isSigned = isSigned;
     };
 
-    uint8_t size = 0; // 8, 16, 32 or 64 only
     bool isSigned = false;
 };
 struct LaiType_Function : LaiType
@@ -58,6 +64,8 @@ struct LaiType_Pointer : LaiType
 static LaiType_Integer builtinTypeChar(8, false);
 static LaiType_Integer builtinTypeI32(32, false);
 static LaiType_Integer builtinTypeS32(32, true);
+static LaiType_Float builtinTypeF32(32);
+static LaiType_Float builtinTypeF64(64);
 //////////////////////////////////////
 
 LaiType *parseBuiltinType(Segment identifier)
@@ -69,6 +77,14 @@ LaiType *parseBuiltinType(Segment identifier)
     if (identifier.equals("s32"))
     {
         return &builtinTypeS32;
+    }
+    if (identifier.equals("f32"))
+    {
+        return &builtinTypeF32;
+    }
+    if (identifier.equals("f64"))
+    {
+        return &builtinTypeF64;
     }
     return nullptr;
 }

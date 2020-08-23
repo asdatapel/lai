@@ -10,11 +10,16 @@ struct IrInstr;
 struct IrDeclaration;
 struct IrGlobalDeclaration;
 struct IrIntegerLiteral;
-struct IrFloatingPointLiteral;
+struct IrFloatLiteral;
 struct IrAdd;
 struct IrSub;
 struct IrStore;
 struct IrReturn;
+
+void error(std::string message)
+{
+    std::cout << message << "\n";
+}
 
 struct IrContainer
 {
@@ -29,13 +34,14 @@ struct IrInstr
     {
         DECLARATION,
         INTEGER_LITERAL,
-        FLOATING_POINT_LITERAL,
+        FLOAT_LITERAL,
         FUNCTION,
         FUNCTION_CALL,
         ADD,
         SUB,
         LOAD,
         STORE,
+        CAST,
         RETURN,
     };
 
@@ -66,12 +72,12 @@ struct IrIntegerLiteral : IrInstr
     long long value = 0;
 };
 
-struct IrFloatingPointLiteral : IrInstr
+struct IrFloatLiteral : IrInstr
 {
-    IrFloatingPointLiteral() { type = Type::FLOATING_POINT_LITERAL; }
-    IrFloatingPointLiteral(double value)
+    IrFloatLiteral() { type = Type::FLOAT_LITERAL; }
+    IrFloatLiteral(double value)
     {
-        type = Type::FLOATING_POINT_LITERAL;
+        type = Type::FLOAT_LITERAL;
         this->value = value;
     }
     double value = 0.0;
@@ -118,6 +124,12 @@ struct IrStore : IrInstr
     IrInstr *value = nullptr;
 };
 
+struct IrCast : IrInstr
+{
+    IrCast() { type = Type::CAST; }
+    IrInstr *value = nullptr;
+};
+
 struct IrReturn : IrInstr
 {
     IrReturn() { type = Type::RETURN; }
@@ -127,9 +139,17 @@ struct IrReturn : IrInstr
 IrContainer *irify(Ast *);
 IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *, IrContainer *parent);
 IrInstr *irifyExpression(Ast_Expression *, IrContainer *, bool wantRef = false);
+IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *, IrContainer *);
+IrInstr *irifyBinaryMathOp(IrInstr *, IrInstr *, char, IrContainer *);
+IrInstr *promote(IrInstr *, LaiType *);
 IrInstr *createLoad(IrInstr *);
 
 LaiType *parseType(Ast_Expression *);
+LaiType *resolvePointerToType(LaiType *);
+LaiType *resolvePromotionType(IrInstr *, IrInstr *);
+LaiType *resolveDereferenceType(LaiType *);
+LaiType *resolveIntegerType(long long);
+LaiType *resolveFloatType(double);
 
 IrContainer *irify(Ast *ast)
 {
@@ -143,25 +163,27 @@ IrContainer *irify(Ast *ast)
         {
             auto st = (Ast_DeclarationStatement *)statement;
 
-            auto dec = new IrGlobalDeclaration;
-            dec->name = st->identifiers[0]->identifier;
-            dec->laiType = parseType(st->explicitType);
-            root->declarations.push_back(dec);
+            auto declaredType = parseType(st->explicitType);
+
+            auto ir = new IrGlobalDeclaration;
+            ir->name = st->identifiers[0]->identifier;
+            ir->laiType = resolvePointerToType(declaredType);
+            root->declarations.push_back(ir);
 
             if (auto value = irifyExpression(st->value, root))
             {
-                dec->initializer = value;
+                ir->initializer = promote(value, declaredType);
             }
         }
         break;
         case Ast_Statement::Type::RETURN:
         {
-            // @VALIDATE error
+            error("Unexpected RETURN statement outside of a function");
         }
         break;
         case Ast_Statement::Type::EXPRESSION:
         {
-            // @VALIDATE no expression outside of a function??
+            error("Unexpected Expression outside of a function");
         }
         break;
         };
@@ -179,7 +201,7 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, IrContainer *pa
     {
         auto dec = new IrDeclaration;
         dec->name = p->identifiers[0]->identifier;
-        dec->laiType = parseType(p->explicitType);
+        dec->laiType = resolvePointerToType(parseType(p->explicitType));
         irFunction->parameters.push_back(dec);
         irFunction->container->declarations.push_back(dec);
     }
@@ -194,7 +216,7 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, IrContainer *pa
 
             auto dec = new IrDeclaration;
             dec->name = st->identifiers[0]->identifier;
-            dec->laiType = parseType(st->explicitType);
+            dec->laiType = resolvePointerToType(parseType(st->explicitType));
             irFunction->container->declarations.push_back(dec);
 
             auto value = irifyExpression(st->value, irFunction->container);
@@ -247,12 +269,19 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
     case Ast_Expression::Type::INTEGER_LITERAL:
     {
         auto exp = (Ast_IntegerLiteralExpression *)expression;
-        return new IrIntegerLiteral(exp->number);
+
+        auto ir = new IrIntegerLiteral(exp->number);
+        ir->laiType = resolveIntegerType(exp->number);
+
+        return ir;
     }
-    case Ast_Expression::Type::FLOATING_POINT_LITERAL:
+    case Ast_Expression::Type::FLOAT_LITERAL:
     {
         auto exp = (Ast_FloatingPointLiteralExpression *)expression;
-        return new IrFloatingPointLiteral(exp->number);
+
+        auto ir = new IrFloatLiteral(exp->number);
+        ir->laiType = resolveFloatType(exp->number);
+        return ir;
     }
     break;
     case Ast_Expression::Type::STRING_LITERAL:
@@ -277,11 +306,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
         auto exp = (Ast_UnaryOperatorExpression *)expression;
 
         auto operand = irifyExpression(exp->operand, container);
-        if (!operand)
-        {
-            // @VALIDATE error
-            return nullptr;
-        }
+        assert(operand);
 
         container->body.push_back(operand);
 
@@ -301,36 +326,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
     case Ast_Expression::Type::BINARY_OPERATION:
     {
         auto exp = (Ast_BinaryOperatorExpression *)expression;
-
-        auto lhs = irifyExpression(exp->leftOperand, container);
-        auto rhs = irifyExpression(exp->rightOperand, container);
-        if (!lhs || !rhs)
-        {
-            // @VALIDATE error
-            return nullptr;
-        }
-
-        container->body.push_back(lhs);
-        container->body.push_back(rhs);
-
-        switch (exp->operatorSymbol)
-        {
-        case '+':
-        {
-            auto irAdd = new IrAdd;
-            irAdd->lhs = lhs;
-            irAdd->rhs = rhs;
-            return irAdd;
-        }
-        case '-':
-        {
-            auto irSub = new IrSub;
-            irSub->lhs = lhs;
-            irSub->rhs = rhs;
-            return irSub;
-        }
-        break;
-        }
+        return irifyBinaryOp(exp, container);
     }
     break;
     case Ast_Expression::Type::ASSIGNMENT:
@@ -339,11 +335,8 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
 
         auto lhs = irifyExpression(exp->lhs, container, true);
         auto rhs = irifyExpression(exp->rhs, container);
-        if (!lhs || !rhs)
-        {
-            // @VALIDATE error
-            return nullptr;
-        }
+        assert(lhs);
+        assert(rhs);
 
         container->body.push_back(lhs);
         container->body.push_back(rhs);
@@ -351,6 +344,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
         auto irStore = new IrStore;
         irStore->target = lhs;
         irStore->value = rhs;
+        irStore->laiType = lhs->laiType;
         return irStore;
     }
     break;
@@ -371,7 +365,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
 
         auto irFunctionCall = new IrFunctionCall;
         irFunctionCall->function = irifyExpression(exp->function, container);
-        irFunctionCall->laiType = irFunctionCall->function->laiType;
+        irFunctionCall->laiType = ((LaiType_Function *)irFunctionCall->function->laiType)->returnType;
 
         for (auto arg : exp->arguments)
         {
@@ -386,11 +380,70 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
     return nullptr;
 }
 
+IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, IrContainer *container)
+{
+    auto lhs = irifyExpression(exp->leftOperand, container);
+    auto rhs = irifyExpression(exp->rightOperand, container);
+    assert(lhs);
+    assert(rhs);
+
+    container->body.push_back(lhs);
+    container->body.push_back(rhs);
+
+    if ((lhs->laiType->laiTypeType == LaiTypeType::INTEGER || lhs->laiType->laiTypeType == LaiTypeType::FLOAT) &&
+        (rhs->laiType->laiTypeType == LaiTypeType::INTEGER || rhs->laiType->laiTypeType == LaiTypeType::FLOAT))
+    {
+        return irifyBinaryMathOp(lhs, rhs, exp->operatorSymbol, container);
+    }
+
+    return nullptr;
+}
+
+IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, char op, IrContainer *container)
+{
+    auto promotionType = resolvePromotionType(lhs, rhs);
+    lhs = promote(lhs, promotionType);
+    rhs = promote(rhs, promotionType);
+
+    switch (op)
+    {
+    case '+':
+    {
+        auto irAdd = new IrAdd;
+        irAdd->lhs = lhs;
+        irAdd->rhs = rhs;
+        irAdd->laiType = lhs->laiType;
+        return irAdd;
+    }
+    case '-':
+    {
+        auto irSub = new IrSub;
+        irSub->lhs = lhs;
+        irSub->rhs = rhs;
+        irSub->laiType = lhs->laiType;
+        return irSub;
+    }
+    break;
+    }
+}
+
+IrInstr *promote(IrInstr *val, LaiType *type)
+{
+    if ((val->laiType->laiTypeType != LaiTypeType::INTEGER && val->laiType->laiTypeType != LaiTypeType::FLOAT) || val->laiType == type)
+    {
+        return val;
+    }
+
+    auto irCast = new IrCast;
+    irCast->value = val;
+    irCast->laiType = type;
+}
+
 IrInstr *createLoad(IrInstr *ptr)
 {
     auto irLoad = new IrLoad;
     irLoad->value = ptr;
-    irLoad->laiType = ptr->laiType;
+    irLoad->laiType = resolveDereferenceType(ptr->laiType);
 
     return irLoad;
 }
@@ -411,6 +464,11 @@ LaiType *parseFunctionType(Ast_FunctionHeaderExpression *expression)
 }
 LaiType *parseType(Ast_Expression *expression)
 {
+    if (!expression)
+    {
+        return nullptr;
+    }
+
     switch (expression->type)
     {
     case Ast_Expression::Type::VARIABLE:
@@ -428,4 +486,56 @@ LaiType *parseType(Ast_Expression *expression)
     }
 
     return nullptr;
+}
+
+LaiType *resolvePointerToType(LaiType *type)
+{
+    auto ptr = new LaiType_Pointer;
+    ptr->pointeeType = type;
+    return ptr;
+}
+
+LaiType *resolvePromotionType(IrInstr *lhs, IrInstr *rhs)
+{
+    if (lhs->laiType->laiTypeType == LaiTypeType::FLOAT)
+    {
+        return lhs->laiType;
+    }
+    if (rhs->laiType->laiTypeType == LaiTypeType::FLOAT)
+    {
+        return rhs->laiType;
+    }
+    if (!((LaiType_Integer *)lhs->laiType)->isSigned)
+    {
+        return lhs->laiType;
+    }
+    if (!((LaiType_Integer *)rhs->laiType)->isSigned)
+    {
+        return rhs->laiType;
+    }
+    if (((LaiType_Integer *)lhs->laiType)->size >= ((LaiType_Integer *)rhs->laiType)->size)
+    {
+        return lhs->laiType;
+    }
+    return rhs->laiType;
+}
+
+LaiType *resolveDereferenceType(LaiType *ptr)
+{
+    if (ptr->laiTypeType != LaiTypeType::POINTER)
+    {
+        error("attempting to dereference a nonpointer");
+    }
+
+    return ((LaiType_Pointer *)ptr)->pointeeType;
+}
+
+LaiType *resolveIntegerType(long long i)
+{
+    return i < 0 ? &builtinTypeS32 : &builtinTypeI32;
+}
+
+LaiType *resolveFloatType(double i)
+{
+    return &builtinTypeF64;
 }

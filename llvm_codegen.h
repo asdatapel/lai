@@ -11,6 +11,7 @@
 
 void codegenModule(IrContainer *);
 void codegenValue(IrInstr *, IrContainer *, llvm::BasicBlock *, llvm::Module &);
+llvm::Value *codegenCast(IrCast *instr, IrContainer *, llvm::BasicBlock *, llvm::Module &);
 llvm::Function *codegenFunction(IrFunction *, llvm::Module &);
 llvm::Type *toLlvmVarType(LaiType *, llvm::LLVMContext &);
 llvm::FunctionType *toLlvmFunctionType(LaiType *, llvm::LLVMContext &);
@@ -37,7 +38,7 @@ void codegenModule(IrContainer *irContainer)
     for (auto declaration : irContainer->declarations)
     {
         auto global = (IrGlobalDeclaration *)declaration;
-        auto llvmType = toLlvmVarType(global->laiType, llvmContext);
+        auto llvmType = toLlvmVarType(resolveDereferenceType(global->laiType), llvmContext);
         auto llvmGlobal = new llvm::GlobalVariable(module, llvmType, false, llvm::GlobalVariable::ExternalLinkage, nullptr);
         llvmGlobal->setInitializer(llvm::Constant::getNullValue(llvmType));
 
@@ -50,6 +51,7 @@ void codegenModule(IrContainer *irContainer)
             }
             else
             {
+                auto x = llvmGlobal->getType();
                 new llvm::StoreInst(global->initializer->llvmValue, llvmGlobal, false, entryBlock);
             }
         }
@@ -92,6 +94,12 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
         irInteger->llvmValue = llvm::ConstantInt::get(module.getContext(), llvm::APInt(32, irInteger->value, true));
     }
     break;
+    case IrInstr::Type::FLOAT_LITERAL:
+    {
+        auto irFloat = (IrFloatLiteral *)instr;
+        irFloat->llvmValue = llvm::ConstantFP::get(toLlvmVarType(irFloat->laiType, module.getContext()), irFloat->value);
+    }
+    break;
     case IrInstr::Type::FUNCTION:
     {
         auto irFunction = (IrFunction *)instr;
@@ -118,7 +126,15 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
         auto irAdd = (IrAdd *)instr;
         codegenValue(irAdd->lhs, irContainer, block, module);
         codegenValue(irAdd->rhs, irContainer, block, module);
-        instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Add, irAdd->lhs->llvmValue, irAdd->rhs->llvmValue, "add", block);
+
+        if (irAdd->laiType->laiTypeType == LaiTypeType::INTEGER)
+        {
+            instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Add, irAdd->lhs->llvmValue, irAdd->rhs->llvmValue, "add", block);
+        }
+        else if (irAdd->laiType->laiTypeType == LaiTypeType::FLOAT)
+        {
+            instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::FAdd, irAdd->lhs->llvmValue, irAdd->rhs->llvmValue, "add", block);
+        }
     }
     break;
     case IrInstr::Type::SUB:
@@ -127,6 +143,15 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
         codegenValue(irSub->lhs, irContainer, block, module);
         codegenValue(irSub->rhs, irContainer, block, module);
         instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Sub, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "sub", block);
+
+        if (irSub->laiType->laiTypeType == LaiTypeType::INTEGER)
+        {
+            instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Sub, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "sub", block);
+        }
+        else if (irSub->laiType->laiTypeType == LaiTypeType::FLOAT)
+        {
+            instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::FSub, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "sub", block);
+        }
     }
     break;
     case IrInstr::Type::LOAD:
@@ -142,6 +167,12 @@ void codegenValue(IrInstr *instr, IrContainer *irContainer, llvm::BasicBlock *bl
         codegenValue(irStore->target, irContainer, block, module);
         codegenValue(irStore->value, irContainer, block, module);
         instr->llvmValue = new llvm::StoreInst(irStore->value->llvmValue, irStore->target->llvmValue, false, block);
+    }
+    break;
+    case IrInstr::Type::CAST:
+    {
+        auto irCast = (IrCast *)instr;
+        irCast->llvmValue = codegenCast(irCast, irContainer, block, module);
     }
     break;
     case IrInstr::Type::RETURN:
@@ -178,7 +209,7 @@ llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
     for (int i = 0; i < irFunction->parameters.size(); i++)
     {
         auto parameter = irFunction->parameters[i];
-        auto llvmType = toLlvmVarType(parameter->laiType, module.getContext());
+        auto llvmType = toLlvmVarType(resolveDereferenceType(parameter->laiType), module.getContext());
         parameter->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
         new llvm::StoreInst(llvmFunction->getArg(i), parameter->llvmValue, false, entryBlock);
     }
@@ -188,7 +219,7 @@ llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
     {
         if (!declaration->llvmValue)
         {
-            auto llvmType = toLlvmVarType(declaration->laiType, module.getContext());
+            auto llvmType = toLlvmVarType(resolveDereferenceType(declaration->laiType), module.getContext());
             declaration->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
         }
     }
@@ -201,6 +232,43 @@ llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
     return llvmFunction;
 };
 
+llvm::Value *codegenCast(IrCast *instr, IrContainer *irContainer, llvm::BasicBlock *block, llvm::Module &module)
+{
+    codegenValue(instr->value, irContainer, block, module);
+
+    if (instr->value->laiType->laiTypeType == instr->laiType->laiTypeType)
+    {
+        return instr->value->llvmValue;
+        // @TODO resize
+    }
+
+    if (instr->value->laiType->laiTypeType == LaiTypeType::INTEGER)
+    {
+        auto intType = (LaiType_Integer *)instr->value->laiType;
+        if (intType->isSigned)
+        {
+            return new llvm::SIToFPInst(instr->value->llvmValue, toLlvmVarType(instr->laiType, module.getContext()), "", block);
+        }
+        else
+        {
+            return new llvm::UIToFPInst(instr->value->llvmValue, toLlvmVarType(instr->laiType, module.getContext()), "", block);
+        }
+    }
+    else
+    {
+
+        auto intType = (LaiType_Integer *)instr->laiType;
+        if (intType->isSigned)
+        {
+            return new llvm::FPToSIInst(instr->value->llvmValue, toLlvmVarType(instr->laiType, module.getContext()), "", block);
+        }
+        else
+        {
+            return new llvm::FPToUIInst(instr->value->llvmValue, toLlvmVarType(instr->laiType, module.getContext()), "", block);
+        }
+    }
+}
+
 llvm::Type *toLlvmVarType(LaiType *type, llvm::LLVMContext &context)
 {
     switch (type->laiTypeType)
@@ -209,6 +277,18 @@ llvm::Type *toLlvmVarType(LaiType *type, llvm::LLVMContext &context)
     {
         auto t = (LaiType_Integer *)type;
         return llvm::Type::getIntNTy(context, t->size);
+    }
+    case LaiTypeType::FLOAT:
+    {
+        auto t = (LaiType_Float *)type;
+        if (t->size == 32)
+        {
+            return llvm::Type::getFloatTy(context);
+        }
+        if (t->size == 64)
+        {
+            return llvm::Type::getDoubleTy(context);
+        }
     }
     case LaiTypeType::POINTER:
     {

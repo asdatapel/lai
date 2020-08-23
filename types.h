@@ -7,7 +7,7 @@
 // enum struct Type
 // {
 //     UNKNOWN, // ERROR?
-//     FLOATING_POINT_NUMBER,
+//     FLOAT_NUMBER,
 //     INTEGER,
 //     FUNCTION,
 //     FUNCTION_POINTER,
@@ -24,7 +24,7 @@
 // };
 // struct Type_FloatingPointNumber : Type_Base
 // {
-//     Type_FloatingPointNumber() { type = Type::FLOATING_POINT_NUMBER; };
+//     Type_FloatingPointNumber() { type = Type::FLOAT_NUMBER; };
 
 //     uint8_t size; // 32 or 64 only
 // };

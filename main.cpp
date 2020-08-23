@@ -64,7 +64,7 @@ std::string printExpression(Ast_Expression *expression, int depth)
         return indent(depth) + "{ type : \"NUMBER_EXPRESSION\", value: " + std::to_string(exp->number) + "}";
     }
     break;
-    case Ast_Expression::Type::FLOATING_POINT_LITERAL:
+    case Ast_Expression::Type::FLOAT_LITERAL:
     {
         auto exp = (Ast_FloatingPointLiteralExpression *)expression;
         return indent(depth) + "{ type : \"NUMBER_EXPRESSION\", value: " + std::to_string(exp->number) + "}";

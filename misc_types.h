@@ -130,4 +130,7 @@ struct Token
     Segment stringVal;
     long long intVal;
     double doubleVal;
+
+    uint32_t start_line = 0;
+    uint32_t start_column = 0;
 };

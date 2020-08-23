@@ -1,26 +1,33 @@
 #include "lexer.h"
 
-Token createTokenEof()
+Token createTokenEof(LexerMetadata &meta)
 {
     Token t;
     t.type = TokenType::T_EOF;
+    t.start_line = meta.currentLine;
+    t.start_column = meta.currentColumn;
 
     return t;
 }
 
-Token createTokenIdentifier(const Segment &file, uint32_t &currentIndex)
+Token createTokenIdentifier(const Segment &file, LexerMetadata &meta)
 {
+    Token t;
+    t.start_line = meta.currentLine;
+    t.start_column = meta.currentColumn;
+
     Segment builder;
-    builder.data = file.data + currentIndex;
+    builder.data = file.data + meta.currentIndex;
     builder.length = 0;
 
-    while (std::isalnum(file.data[currentIndex]) || file.data[currentIndex] == '_')
+    while (std::isalnum(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '_')
     {
         builder.length++;
-        currentIndex++;
+        meta.currentIndex++;
     }
 
-    Token t;
+    meta.currentColumn += builder.length;
+
     t.identifier = builder;
     if (builder.equals("return"))
     {
@@ -30,29 +37,34 @@ Token createTokenIdentifier(const Segment &file, uint32_t &currentIndex)
     {
         t.type = TokenType::T_IDENTIFIER;
     }
+
     return t;
 }
 
-Token createTokenNumber(const Segment &file, uint32_t &currentIndex)
+Token createTokenNumber(const Segment &file, LexerMetadata &meta)
 {
-    if (file.data[currentIndex] == '0' && file.data[currentIndex + 1] == 'x')
+    Token t;
+    t.start_line = meta.currentLine;
+    t.start_column = meta.currentColumn;
+
+    if (file.data[meta.currentIndex] == '0' && file.data[meta.currentIndex + 1] == 'x')
     {
         // @TODO hex number
     }
-    if (file.data[currentIndex] == '0' && file.data[currentIndex + 1] == 'b')
+    if (file.data[meta.currentIndex] == '0' && file.data[meta.currentIndex + 1] == 'b')
     {
         // @TODO binary number
     }
 
     Segment builder;
-    builder.data = file.data + currentIndex;
+    builder.data = file.data + meta.currentIndex;
     builder.length = 0;
 
     bool containsPeriod = false;
 
-    while (std::isdigit(file.data[currentIndex]) || file.data[currentIndex] == '.')
+    while (std::isdigit(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '.')
     {
-        if (file.data[currentIndex] == '.')
+        if (file.data[meta.currentIndex] == '.')
         {
             if (containsPeriod)
             {
@@ -63,12 +75,13 @@ Token createTokenNumber(const Segment &file, uint32_t &currentIndex)
         }
 
         builder.length++;
-        currentIndex++;
+        meta.currentIndex++;
     }
+
+    meta.currentColumn += builder.length;
 
     if (containsPeriod)
     {
-        Token t;
         t.type = TokenType::T_FLOAT_LITERAL;
 
         ///////////////////////////////////////////////////////////////
@@ -86,28 +99,36 @@ Token createTokenNumber(const Segment &file, uint32_t &currentIndex)
     }
     else
     {
-        Token t;
         t.type = TokenType::T_INTEGER_LITERAL;
         t.intVal = std::stoi(builder.toString());
         return t;
     }
 }
 
-Token createTokenCompilerDirective(const Segment &file, uint32_t &currentIndex)
+Token createTokenCompilerDirective(const Segment &file, LexerMetadata &meta)
 {
-    currentIndex++; // eat '#'
+    meta.currentIndex++; // eat '#'
+    meta.currentColumn++;
 
-    Token t = createTokenIdentifier(file, currentIndex);
+    Token t = createTokenIdentifier(file, meta);
     t.type = TokenType::T_COMPILER_DIRECTIVE;
+    t.start_column--; // account for the '#'
+
     return t;
 }
 
-Token createTokenString(const Segment &file, uint32_t &currentIndex)
+Token createTokenString(const Segment &file, LexerMetadata &meta)
 {
+    Token t;
+    t.type = TokenType::T_STRING_LITERAL;
+    t.start_line = meta.currentLine;
+    t.start_column = meta.currentColumn;
+
     auto eatPossibleQuote = [&]() {
-        if (file.data[currentIndex] == '"')
+        if (file.data[meta.currentIndex] == '"')
         {
-            currentIndex++; // eat '"'
+            meta.currentIndex++; // eat '"'
+            meta.currentColumn++;
         }
     };
     auto isEndOfString = [](char c) {
@@ -117,18 +138,17 @@ Token createTokenString(const Segment &file, uint32_t &currentIndex)
     eatPossibleQuote();
 
     Segment builder;
-    builder.data = file.data + currentIndex;
+    builder.data = file.data + meta.currentIndex;
     builder.length = 0;
-    while (!isEndOfString(file.data[currentIndex]))
+    while (!isEndOfString(file.data[meta.currentIndex]))
     {
         builder.length++;
-        currentIndex++;
+        meta.currentIndex++;
+        meta.currentColumn++;
     }
 
     eatPossibleQuote();
 
-    Token t;
-    t.type = TokenType::T_STRING_LITERAL;
     t.stringVal = builder;
 
     return t;
@@ -138,36 +158,37 @@ Token Lexer::nextToken()
 {
     skipWhitespace();
 
-    if (currentIndex >= file.length)
+    if (meta.currentIndex >= file.length)
     {
-        return createTokenEof();
+        return createTokenEof(meta);
     }
 
-    if (std::isdigit(file.data[currentIndex]))
+    if (std::isdigit(file.data[meta.currentIndex]))
     {
-        return createTokenNumber(file, currentIndex);
+        return createTokenNumber(file, meta);
     }
-    if (file.data[currentIndex] == '"')
+    if (file.data[meta.currentIndex] == '"')
     {
-        return createTokenString(file, currentIndex);
+        return createTokenString(file, meta);
     }
-    if (std::isalpha(file.data[currentIndex]) || file.data[currentIndex] == '_')
+    if (std::isalpha(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '_')
     {
-        return createTokenIdentifier(file, currentIndex);
+        return createTokenIdentifier(file, meta);
     }
-    if (file.data[currentIndex] == '#')
+    if (file.data[meta.currentIndex] == '#')
     {
-        return createTokenCompilerDirective(file, currentIndex);
+        return createTokenCompilerDirective(file, meta);
     }
 
-    if (file.data[currentIndex] == '-' && file.data[currentIndex + 1] == '>')
+    if (file.data[meta.currentIndex] == '-' && file.data[meta.currentIndex + 1] == '>')
     {
         Segment builder;
-        builder.data = file.data + currentIndex;
+        builder.data = file.data + meta.currentIndex;
         builder.length = 0;
 
         builder.length += 2; // swallow '->'
-        currentIndex += 2;
+        meta.currentIndex += 2;
+        meta.currentColumn += 2;
 
         Token t;
         t.type = TokenType::T_ARROW;
@@ -175,22 +196,23 @@ Token Lexer::nextToken()
     }
 
     Token t;
-    t.type = static_cast<TokenType>(file.data[currentIndex]);
-    currentIndex++; // swallow the symbol
+    t.type = static_cast<TokenType>(file.data[meta.currentIndex]);
+    meta.currentIndex++; // swallow the symbol
+    meta.currentColumn++;
     return t;
 };
 
 void Lexer::skipWhitespace()
 {
-    while (std::isspace(file.data[currentIndex]))
+    while (std::isspace(file.data[meta.currentIndex]))
     {
-        currentColumn++;
-        if (file.data[currentIndex] == '\n')
+        meta.currentColumn++;
+        if (file.data[meta.currentIndex] == '\n')
         {
-            currentLine++;
-            currentColumn = 0;
+            meta.currentLine++;
+            meta.currentColumn = 0;
         }
-        currentIndex++;
+        meta.currentIndex++;
     }
 };
 

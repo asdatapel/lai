@@ -58,7 +58,7 @@ struct Ast_Expression
     enum struct Type
     {
         INTEGER_LITERAL,
-        FLOATING_POINT_LITERAL,
+        FLOAT_LITERAL,
         STRING_LITERAL,
         VARIABLE,
         UNARY_OPERATION,
@@ -80,7 +80,7 @@ struct Ast_IntegerLiteralExpression : Ast_Expression
 };
 struct Ast_FloatingPointLiteralExpression : Ast_Expression
 {
-    Ast_FloatingPointLiteralExpression() { type = Type::FLOATING_POINT_LITERAL; };
+    Ast_FloatingPointLiteralExpression() { type = Type::FLOAT_LITERAL; };
 
     double number = 0;
 };
