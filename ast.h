@@ -24,18 +24,19 @@ struct Ast_Statement
 {
     enum struct Type
     {
-        EXPRESSION,
+        BLOCK,
         DECLARATION,
+        EXPRESSION,
         RETURN,
     };
 
     Type type;
 };
-struct Ast_ExpressionStatement : Ast_Statement
+struct Ast_BlockStatement : Ast_Statement
 {
-    Ast_ExpressionStatement() { type = Type::EXPRESSION; };
+    Ast_BlockStatement() { type = Type::BLOCK; };
 
-    Ast_Expression *value = nullptr;
+    Ast *body = nullptr;
 };
 struct Ast_DeclarationStatement : Ast_Statement
 {
@@ -44,6 +45,12 @@ struct Ast_DeclarationStatement : Ast_Statement
     bool constant;
     std::vector<Ast_VariableExpression *> identifiers;
     Ast_Expression *explicitType = nullptr;
+    Ast_Expression *value = nullptr;
+};
+struct Ast_ExpressionStatement : Ast_Statement
+{
+    Ast_ExpressionStatement() { type = Type::EXPRESSION; };
+
     Ast_Expression *value = nullptr;
 };
 struct Ast_ReturnStatement : Ast_Statement

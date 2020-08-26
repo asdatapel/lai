@@ -1,27 +1,16 @@
-a : s32 = 32 + 2;
-b : i32;
-c : s32 = 24 - 2;
 d : s32 = -24;
 header : (s1: s32, i1: i32, s2: s32) -> s32;
 
-func1 : (s1: s32, i1: i32, s2: s32) -> s32 : (s1: s32, i1: i32, s2: s32) -> s32 {
-    m1 : i32 = 1;
-    m2 : i32 = -25;
-    return s1 + i1;
-};
-
-func2 : (s1: s32, s2: s32) -> s32:(s1: s32, s2: s32) -> s32 {
-    inside_func: (s1: s32, s2: s32) -> s32 : (s1: s32, s2: s32) -> s32 {
-        m1 : s32 = s1 + s2;
+func2 :: (s1: s32, s2: f64) {
+    inside_func :: (s1: f64, s2: s32) -> f64 {
+        m1 : s32 = s2;
         return m1 + s2;
     };
 
-    header : (s1: s32, s2: i32) -> s32;
+    header : (s1: f64, s2: s32) -> f64;
     header = inside_func;
-    return inside_func(s2, s1);
+    return header(s2, s1);
 };
 
 vv: s32 = c;
-e : s32 = func1(-456, 12, 3);
-f : f64 = 2.22 + 3.7 + 1;
-g : s32 = f;
+e : s32 = func2(12, 3.3339999999999999);

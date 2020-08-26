@@ -8,7 +8,6 @@
 struct IrContainer;
 struct IrInstr;
 struct IrDeclaration;
-struct IrGlobalDeclaration;
 struct IrIntegerLiteral;
 struct IrFloatLiteral;
 struct IrAdd;
@@ -18,7 +17,7 @@ struct IrReturn;
 
 void error(std::string message)
 {
-    std::cout << message << "\n";
+    std::cout << message << std::endl;
 }
 
 struct IrContainer
@@ -54,10 +53,6 @@ struct IrDeclaration : IrInstr
 {
     IrDeclaration() { type = Type::DECLARATION; }
     Segment name;
-};
-
-struct IrGlobalDeclaration : IrDeclaration
-{
     IrInstr *initializer = nullptr;
 };
 
@@ -138,6 +133,7 @@ struct IrReturn : IrInstr
 
 IrContainer *irify(Ast *);
 IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *, IrContainer *parent);
+IrInstr *irifyDeclaration(Ast_DeclarationStatement *, IrContainer *);
 IrInstr *irifyExpression(Ast_Expression *, IrContainer *, bool wantRef = false);
 IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *, IrContainer *);
 IrInstr *irifyBinaryMathOp(IrInstr *, IrInstr *, char, IrContainer *);
@@ -162,28 +158,22 @@ IrContainer *irify(Ast *ast)
         case Ast_Statement::Type::DECLARATION:
         {
             auto st = (Ast_DeclarationStatement *)statement;
-
-            auto declaredType = parseType(st->explicitType);
-
-            auto ir = new IrGlobalDeclaration;
-            ir->name = st->identifiers[0]->identifier;
-            ir->laiType = resolvePointerToType(declaredType);
-            root->declarations.push_back(ir);
-
-            if (auto value = irifyExpression(st->value, root))
-            {
-                ir->initializer = promote(value, declaredType);
-            }
+            irifyDeclaration(st, root);
         }
         break;
-        case Ast_Statement::Type::RETURN:
+        case Ast_Statement::Type::BLOCK:
         {
-            error("Unexpected RETURN statement outside of a function");
+            error("Unexpected statement block outside of a function");
         }
         break;
         case Ast_Statement::Type::EXPRESSION:
         {
             error("Unexpected Expression outside of a function");
+        }
+        break;
+        case Ast_Statement::Type::RETURN:
+        {
+            error("Unexpected RETURN statement outside of a function");
         }
         break;
         };
@@ -193,8 +183,10 @@ IrContainer *irify(Ast *ast)
 
 IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, IrContainer *parent)
 {
+    auto functionType = (LaiType_Function *)parseType(exp->header);
+
     auto irFunction = new IrFunction;
-    irFunction->laiType = parseType(exp->header);
+    irFunction->laiType = functionType;
     irFunction->container = new IrContainer;
 
     for (auto p : exp->header->parameters)
@@ -206,39 +198,15 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, IrContainer *pa
         irFunction->container->declarations.push_back(dec);
     }
 
-    for (auto statement : exp->body->statements)
+    for (int i = 0; i < exp->body->statements.size(); i++)
     {
+        auto statement = exp->body->statements[i];
         switch (statement->type)
         {
         case Ast_Statement::Type::DECLARATION:
         {
             auto st = (Ast_DeclarationStatement *)statement;
-
-            auto dec = new IrDeclaration;
-            dec->name = st->identifiers[0]->identifier;
-            dec->laiType = resolvePointerToType(parseType(st->explicitType));
-            irFunction->container->declarations.push_back(dec);
-
-            auto value = irifyExpression(st->value, irFunction->container);
-            if (value)
-            {
-                irFunction->container->body.push_back(value);
-
-                auto irStore = new IrStore;
-                irStore->target = dec;
-                irStore->value = value;
-                irFunction->container->body.push_back(irStore);
-            }
-        }
-        break;
-        case Ast_Statement::Type::RETURN:
-        {
-            auto st = (Ast_ReturnStatement *)statement;
-
-            auto value = irifyExpression(st->value, irFunction->container);
-            auto irReturn = new IrReturn;
-            irReturn->value = value;
-            irFunction->container->body.push_back(irReturn);
+            irifyDeclaration(st, irFunction->container);
         }
         break;
         case Ast_Statement::Type::EXPRESSION:
@@ -251,10 +219,61 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, IrContainer *pa
             }
         }
         break;
+        case Ast_Statement::Type::RETURN:
+        {
+            auto st = (Ast_ReturnStatement *)statement;
+
+            auto value = irifyExpression(st->value, irFunction->container);
+
+            if (functionType->returnType)
+            {
+                // @TODO set irFunction->laiType to common type (maybe with promotion)
+                // error if types conflict
+            }
+            else
+            {
+                functionType->returnType = value->laiType;
+            }
+
+            auto irReturn = new IrReturn;
+            irReturn->value = promote(value, functionType->returnType);
+            irFunction->container->body.push_back(irReturn);
+        }
+        break;
         };
     }
 
     return irFunction;
+}
+
+IrInstr *irifyDeclaration(Ast_DeclarationStatement *st, IrContainer *container)
+{
+    auto ir = new IrDeclaration;
+    ir->name = st->identifiers[0]->identifier;
+    container->declarations.push_back(ir);
+
+    auto declType = parseType(st->explicitType);
+    ir->laiType = resolvePointerToType(declType); // set type for initializer
+
+    IrInstr *initializer = irifyExpression(st->value, container);
+
+    if (!declType)
+    {
+        if (!initializer)
+        {
+            error("something went wrong, how did we get here");
+        }
+
+        declType = initializer->laiType;
+    }
+
+    ir->laiType = resolvePointerToType(declType);
+    if (initializer)
+    {
+        // @VALIDATE declType and initializer type should match
+        ir->initializer = promote(initializer, declType);
+    }
+    return ir;
 }
 
 IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, bool wantRef)
@@ -363,13 +382,25 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *container, boo
     {
         auto exp = (Ast_FunctionCallExpression *)expression;
 
-        auto irFunctionCall = new IrFunctionCall;
-        irFunctionCall->function = irifyExpression(exp->function, container);
-        irFunctionCall->laiType = ((LaiType_Function *)irFunctionCall->function->laiType)->returnType;
-
-        for (auto arg : exp->arguments)
+        auto function = irifyExpression(exp->function, container);
+        if (function->laiType->laiTypeType != LaiTypeType::FUNCTION)
         {
-            irFunctionCall->arguments.push_back(irifyExpression(arg, container));
+            error("attempting a function call with a nonfunction type");
+        }
+        auto functionType = ((LaiType_Function *)function->laiType);
+
+        if (functionType->parameters.size() != exp->arguments.size())
+        {
+            error("wrong number of args");
+        }
+
+        auto irFunctionCall = new IrFunctionCall;
+        irFunctionCall->function = function;
+        irFunctionCall->laiType = functionType->returnType;
+        for (int i = 0; i < exp->arguments.size(); i++)
+        {
+            auto promoted = promote(irifyExpression(exp->arguments[i], container), functionType->parameters[i]);
+            irFunctionCall->arguments.push_back(promoted);
         }
 
         return irFunctionCall;

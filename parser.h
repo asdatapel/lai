@@ -51,11 +51,19 @@ Ast_Statement *parseStatement(TokenList *tokenList, Ast *ast)
     auto token = tokenList->peek_next();
     switch (token->type)
     {
-    case static_cast<TokenType>('#'):
+    case static_cast<TokenType>('{'):
     {
-        tokenList->eat(); // eat '#'
-        // auto st = parseCompilerDirective(tokenList);
-        statement = nullptr;
+        tokenList->eat(); // eat '{'
+        auto ast = parseAst(tokenList);
+
+        if (tokenList->peek_next()->type != static_cast<TokenType>('}')){
+            // @VALIDATE error
+        }
+
+        auto st = new Ast_BlockStatement;
+        st->body = ast;
+
+        statement = st;
     }
     break;
     case TokenType::T_RETURN:

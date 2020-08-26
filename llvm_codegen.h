@@ -37,7 +37,7 @@ void codegenModule(IrContainer *irContainer)
 
     for (auto declaration : irContainer->declarations)
     {
-        auto global = (IrGlobalDeclaration *)declaration;
+        auto global = (IrDeclaration *)declaration;
         auto llvmType = toLlvmVarType(resolveDereferenceType(global->laiType), llvmContext);
         auto llvmGlobal = new llvm::GlobalVariable(module, llvmType, false, llvm::GlobalVariable::ExternalLinkage, nullptr);
         llvmGlobal->setInitializer(llvm::Constant::getNullValue(llvmType));
@@ -221,6 +221,12 @@ llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
         {
             auto llvmType = toLlvmVarType(resolveDereferenceType(declaration->laiType), module.getContext());
             declaration->llvmValue = new llvm::AllocaInst(llvmType, 0, "", entryBlock);
+
+            if (declaration->initializer)
+            {
+                codegenValue(declaration->initializer, irContainer, entryBlock, module);
+                new llvm::StoreInst(declaration->initializer->llvmValue, declaration->llvmValue, false, entryBlock);
+            }
         }
     }
 

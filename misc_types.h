@@ -117,6 +117,8 @@ enum struct TokenType
 
     T_ARROW,
 
+    T_IF,
+    T_ELSE,
     T_RETURN,
 
     T_EOF,

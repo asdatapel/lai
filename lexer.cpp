@@ -10,7 +10,7 @@ Token createTokenEof(LexerMetadata &meta)
     return t;
 }
 
-Token createTokenIdentifier(const Segment &file, LexerMetadata &meta)
+Token createTokenKeywordOrIdentifier(const Segment &file, LexerMetadata &meta)
 {
     Token t;
     t.start_line = meta.currentLine;
@@ -32,6 +32,14 @@ Token createTokenIdentifier(const Segment &file, LexerMetadata &meta)
     if (builder.equals("return"))
     {
         t.type = TokenType::T_RETURN;
+    }
+    else if (builder.equals("if"))
+    {
+        t.type = TokenType::T_IF;
+    }
+    else if (builder.equals("else"))
+    {
+        t.type = TokenType::T_ELSE;
     }
     else
     {
@@ -110,7 +118,7 @@ Token createTokenCompilerDirective(const Segment &file, LexerMetadata &meta)
     meta.currentIndex++; // eat '#'
     meta.currentColumn++;
 
-    Token t = createTokenIdentifier(file, meta);
+    Token t = createTokenKeywordOrIdentifier(file, meta);
     t.type = TokenType::T_COMPILER_DIRECTIVE;
     t.start_column--; // account for the '#'
 
@@ -171,13 +179,14 @@ Token Lexer::nextToken()
     {
         return createTokenString(file, meta);
     }
-    if (std::isalpha(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '_')
-    {
-        return createTokenIdentifier(file, meta);
-    }
     if (file.data[meta.currentIndex] == '#')
     {
         return createTokenCompilerDirective(file, meta);
+    }
+    if (std::isalpha(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '_')
+    {
+
+        return createTokenKeywordOrIdentifier(file, meta);
     }
 
     if (file.data[meta.currentIndex] == '-' && file.data[meta.currentIndex + 1] == '>')
