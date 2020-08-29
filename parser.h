@@ -10,27 +10,27 @@
 #include "token_list.h"
 #include "types.h"
 
-Ast_Statement *parseStatement(TokenList *, Ast *ast);
-Ast_DeclarationStatement *parseDeclaration(TokenList *, Ast *ast);
+Ast_Statement *parseStatement(TokenList *);
+Ast_DeclarationStatement *parseDeclaration(TokenList *);
 
-Ast_Expression *parseTerm(TokenList *, Ast *ast);
-Ast_Expression *parseExpression(TokenList *, Ast *ast);
-Ast_Expression *parseFunction(TokenList *, Ast *ast);
+Ast_Expression *parseTerm(TokenList *);
+Ast_Expression *parseExpression(TokenList *);
+Ast_Expression *parseFunction(TokenList *);
 
 bool isDeclaration(TokenList *);
 bool isFunction(TokenList *);
 bool isUnaryOperator(TokenType c);
 bool isBinaryOperator(TokenType c);
 
-Ast *parseAst(TokenList *tokenList)
+Ast_BlockStatement *parseAst(TokenList *tokenList)
 {
-    auto ast = new Ast;
+    auto rootBlock = new Ast_BlockStatement;
 
     auto token = tokenList->peek_next();
     while (token->type != TokenType::T_EOF && token->type != static_cast<TokenType>('}'))
     {
-        auto st = parseStatement(tokenList, ast);
-        ast->statements.push_back(st);
+        auto st = parseStatement(tokenList);
+        rootBlock->body.push_back(st);
 
         if (tokenList->peek_next()->type != static_cast<TokenType>(';'))
         {
@@ -41,10 +41,10 @@ Ast *parseAst(TokenList *tokenList)
         token = tokenList->peek_next();
     }
 
-    return ast;
+    return rootBlock;
 }
 
-Ast_Statement *parseStatement(TokenList *tokenList, Ast *ast)
+Ast_Statement *parseStatement(TokenList *tokenList)
 {
     Ast_Statement *statement = nullptr;
 
@@ -54,23 +54,20 @@ Ast_Statement *parseStatement(TokenList *tokenList, Ast *ast)
     case static_cast<TokenType>('{'):
     {
         tokenList->eat(); // eat '{'
-        auto ast = parseAst(tokenList);
+        auto block = parseAst(tokenList);
 
         if (tokenList->peek_next()->type != static_cast<TokenType>('}')){
             // @VALIDATE error
         }
 
-        auto st = new Ast_BlockStatement;
-        st->body = ast;
-
-        statement = st;
+        statement = block;
     }
     break;
     case TokenType::T_RETURN:
     {
         tokenList->eat(); // eat 'return'
 
-        auto exp = parseExpression(tokenList, ast);
+        auto exp = parseExpression(tokenList);
 
         auto st = new Ast_ReturnStatement;
         st->value = exp;
@@ -82,11 +79,11 @@ Ast_Statement *parseStatement(TokenList *tokenList, Ast *ast)
     {
         if (isDeclaration(tokenList))
         {
-            statement = parseDeclaration(tokenList, ast);
+            statement = parseDeclaration(tokenList);
         }
         else
         {
-            auto exp = parseExpression(tokenList, ast);
+            auto exp = parseExpression(tokenList);
             if (exp)
             {
                 auto st = new Ast_ExpressionStatement;
@@ -102,7 +99,7 @@ Ast_Statement *parseStatement(TokenList *tokenList, Ast *ast)
     return statement;
 };
 
-Ast_DeclarationStatement *parseDeclaration(TokenList *tokenList, Ast *ast)
+Ast_DeclarationStatement *parseDeclaration(TokenList *tokenList)
 {
     auto token = tokenList->peek_next();
     auto st = new Ast_DeclarationStatement;
@@ -135,7 +132,7 @@ Ast_DeclarationStatement *parseDeclaration(TokenList *tokenList, Ast *ast)
         // @VALIDATE error
     }
     tokenList->eat(); // eat ':'
-    st->explicitType = parseTerm(tokenList, ast);
+    st->explicitType = parseTerm(tokenList);
 
     token = tokenList->peek_next();
 
@@ -144,13 +141,13 @@ Ast_DeclarationStatement *parseDeclaration(TokenList *tokenList, Ast *ast)
         st->constant = (token->type == static_cast<TokenType>(':'));
         tokenList->eat(); // eat ':' or '='
 
-        st->value = parseExpression(tokenList, ast);
+        st->value = parseExpression(tokenList);
     }
 
     return st;
 };
 
-Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
+Ast_Expression *parseTerm(TokenList *tokenList)
 {
     auto token = tokenList->peek_next();
     switch (token->type)
@@ -159,11 +156,11 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
     {
         if (isFunction(tokenList))
         {
-            return parseFunction(tokenList, ast);
+            return parseFunction(tokenList);
         }
 
         tokenList->eat(); // '('
-        auto exp = parseExpression(tokenList, ast);
+        auto exp = parseExpression(tokenList);
         if (tokenList->peek_next()->type != static_cast<TokenType>(')'))
         {
             // @VALIDATE error
@@ -208,6 +205,15 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
         return exp;
     }
     break;
+    case TokenType::T_IF:
+    {
+        tokenList->eat(); // eat 'if'
+
+        auto exp = new Ast_IfExpression;
+        exp->body = parseStatement(tokenList);
+        return exp;
+    }
+    break;
     }
 
     if (token->type == static_cast<TokenType>('-'))
@@ -236,7 +242,7 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
         tokenList->eat(); // eat operator
 
         auto exp = new Ast_UnaryOperatorExpression;
-        exp->operand = parseExpression(tokenList, ast);
+        exp->operand = parseExpression(tokenList);
         exp->operatorSymbol = static_cast<char>(token->type);
 
         return exp;
@@ -245,9 +251,9 @@ Ast_Expression *parseTerm(TokenList *tokenList, Ast *ast)
     return nullptr;
 };
 
-Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
+Ast_Expression *parseExpression(TokenList *tokenList)
 {
-    auto firstTerm = parseTerm(tokenList, ast);
+    auto firstTerm = parseTerm(tokenList);
     if (!firstTerm)
         return nullptr;
 
@@ -264,7 +270,7 @@ Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
         token = tokenList->peek_next();
         while (token->type != static_cast<TokenType>(')'))
         {
-            exp->arguments.push_back(parseExpression(tokenList, ast));
+            exp->arguments.push_back(parseExpression(tokenList));
 
             token = tokenList->peek_next();
             if (token->type == static_cast<TokenType>(','))
@@ -283,7 +289,7 @@ Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
     {
         tokenList->eat(); // eat '='
 
-        auto rhs = parseExpression(tokenList, ast);
+        auto rhs = parseExpression(tokenList);
 
         auto exp = new Ast_AssignmentExpression;
         exp->lhs = firstTerm;
@@ -301,7 +307,7 @@ Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
         auto exp = new Ast_BinaryOperatorExpression;
         exp->leftOperand = firstTerm;
         exp->operatorSymbol = static_cast<char>(token->type);
-        exp->rightOperand = parseExpression(tokenList, ast);
+        exp->rightOperand = parseExpression(tokenList);
 
         return exp;
     }
@@ -309,12 +315,12 @@ Ast_Expression *parseExpression(TokenList *tokenList, Ast *ast)
     return firstTerm;
 };
 
-Ast_Expression *parseFunction(TokenList *tokenList, Ast *ast)
+Ast_Expression *parseFunction(TokenList *tokenList)
 {
     tokenList->eat(); // eat '('
 
     std::vector<Ast_DeclarationStatement *> params;
-    auto firstStatement = parseDeclaration(tokenList, ast);
+    auto firstStatement = parseDeclaration(tokenList);
     if (firstStatement)
     {
         params.push_back(firstStatement);
@@ -322,7 +328,7 @@ Ast_Expression *parseFunction(TokenList *tokenList, Ast *ast)
         while (tokenList->peek_next()->type == static_cast<TokenType>(','))
         {
             tokenList->eat(); // eat ','
-            params.push_back(parseDeclaration(tokenList, ast));
+            params.push_back(parseDeclaration(tokenList));
         }
     }
     if (tokenList->peek_next()->type != static_cast<TokenType>(')'))
@@ -339,7 +345,7 @@ Ast_Expression *parseFunction(TokenList *tokenList, Ast *ast)
     {
         tokenList->eat(); // eat arrow
 
-        auto returnType = parseExpression(tokenList, ast);
+        auto returnType = parseExpression(tokenList);
         if (!returnType)
         {
             // @VALIDATE error expected type after arrow

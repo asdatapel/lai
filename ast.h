@@ -8,17 +8,12 @@
 #include "token_list.h"
 
 // forward decs
-struct Ast;
+struct Ast_BlockStatement;
 struct Ast_Statement;
 struct Ast_Expression;
 struct Ast_VariableExpression;
 
 struct Type_Base;
-
-struct Ast
-{
-    std::vector<Ast_Statement *> statements;
-};
 
 struct Ast_Statement
 {
@@ -35,8 +30,7 @@ struct Ast_Statement
 struct Ast_BlockStatement : Ast_Statement
 {
     Ast_BlockStatement() { type = Type::BLOCK; };
-
-    Ast *body = nullptr;
+    std::vector<Ast_Statement *> body;
 };
 struct Ast_DeclarationStatement : Ast_Statement
 {
@@ -74,6 +68,7 @@ struct Ast_Expression
         FUNCTION_HEADER,
         FUNCTION_DEFINITION,
         FUNCTION_CALL,
+        IF,
     };
 
     Type type;
@@ -137,7 +132,7 @@ struct Ast_FunctionDefinitionExpression : Ast_Expression
     Ast_FunctionDefinitionExpression() { type = Type::FUNCTION_DEFINITION; };
 
     Ast_FunctionHeaderExpression *header = nullptr;
-    Ast *body = nullptr;
+    Ast_BlockStatement *body = nullptr;
 };
 struct Ast_FunctionCallExpression : Ast_Expression
 {
@@ -145,4 +140,10 @@ struct Ast_FunctionCallExpression : Ast_Expression
 
     Ast_Expression *function = nullptr;
     std::vector<Ast_Expression *> arguments;
+};
+struct Ast_IfExpression : Ast_Expression
+{
+    Ast_IfExpression() { type = Type::IF; };
+
+    Ast_Statement *body = nullptr;
 };

@@ -32,7 +32,7 @@ std::string printExpression(Ast_Expression *expression, int depth)
     {
         auto exp = (Ast_FunctionDefinitionExpression *)expression;
         std::string body = "[";
-        for (auto s : exp->body->statements)
+        for (auto s : exp->body->body)
         {
             body += printStatement(s, depth + 1) + ",";
         }
@@ -145,6 +145,8 @@ std::string printStatement(Ast_Statement *statement, int depth)
     }
     break;
     }
+    
+    return "";
 };
 
 int main(int argc, char *argv[])
@@ -160,7 +162,7 @@ int main(int argc, char *argv[])
     //resolveTypes(ast);
 
     //std::cout << ast->statements.size() << std::endl;
-    for (auto s : ast->statements)
+    for (auto s : ast->body)
     {
         std::cout << printStatement(s, 0) << std::endl;
     }

@@ -8,6 +8,12 @@ func2 :: (s1: s32, s2: f64) {
     };
 
     header : (s1: f64, s2: s32) -> f64;
+
+    {
+        bm : s32 = 21321;
+        return bm;
+    }
+
     header = inside_func;
     return header(s2, s1);
 };
