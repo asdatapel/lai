@@ -56,7 +56,8 @@ Ast_Statement *parseStatement(TokenList *tokenList)
         tokenList->eat(); // eat '{'
         auto block = parseAst(tokenList);
 
-        if (tokenList->peek_next()->type != static_cast<TokenType>('}')){
+        if (tokenList->peek_next()->type != static_cast<TokenType>('}'))
+        {
             // @VALIDATE error
         }
 
@@ -178,6 +179,16 @@ Ast_Expression *parseTerm(TokenList *tokenList)
         return exp;
     }
     break;
+    case TokenType::T_FALSE:
+    case TokenType::T_TRUE:
+    {
+        tokenList->eat(); // eat false
+
+        auto exp = new Ast_BooleanExpression;
+        exp->value = (token->type == TokenType::T_TRUE);
+        return exp;
+    }
+    break;
     case TokenType::T_FLOAT_LITERAL:
     {
         tokenList->eat(); // eat number
@@ -210,6 +221,7 @@ Ast_Expression *parseTerm(TokenList *tokenList)
         tokenList->eat(); // eat 'if'
 
         auto exp = new Ast_IfExpression;
+        exp->condition = parseExpression(tokenList);
         exp->body = parseStatement(tokenList);
         return exp;
     }
@@ -258,19 +270,17 @@ Ast_Expression *parseExpression(TokenList *tokenList)
         return nullptr;
 
     auto token = tokenList->peek_next();
-    switch (token->type)
-    {
-    case static_cast<TokenType>('('): // function call
+    while (token->type == static_cast<TokenType>('(')) // function call
     {
         tokenList->eat(); // eat '('
 
-        auto exp = new Ast_FunctionCallExpression;
-        exp->function = firstTerm;
+        auto call = new Ast_FunctionCallExpression;
+        call->function = firstTerm;
 
         token = tokenList->peek_next();
         while (token->type != static_cast<TokenType>(')'))
         {
-            exp->arguments.push_back(parseExpression(tokenList));
+            call->arguments.push_back(parseExpression(tokenList));
 
             token = tokenList->peek_next();
             if (token->type == static_cast<TokenType>(','))
@@ -281,10 +291,13 @@ Ast_Expression *parseExpression(TokenList *tokenList)
         }
 
         tokenList->eat(); // eat ')'
+        token = tokenList->peek_next();
 
-        return exp;
+        firstTerm = call;
     }
-    break;
+
+    switch (token->type)
+    {
     case static_cast<TokenType>('='):
     {
         tokenList->eat(); // eat '='
@@ -306,7 +319,7 @@ Ast_Expression *parseExpression(TokenList *tokenList)
 
         auto exp = new Ast_BinaryOperatorExpression;
         exp->leftOperand = firstTerm;
-        exp->operatorSymbol = static_cast<char>(token->type);
+        exp->operatorSymbol = token->type;
         exp->rightOperand = parseExpression(tokenList);
 
         return exp;
@@ -390,12 +403,18 @@ bool isFunction(TokenList *tokenList)
 
 bool isUnaryOperator(TokenType c)
 {
-    const std::set<TokenType> operators = std::set<TokenType>{static_cast<TokenType>('-')};
+    const std::set<TokenType> operators =
+        std::set<TokenType>{
+            static_cast<TokenType>('-')};
     return operators.count(c);
 };
 
 bool isBinaryOperator(TokenType c)
 {
-    const std::set<TokenType> operators = std::set<TokenType>{static_cast<TokenType>('+'), static_cast<TokenType>('-')};
+    const std::set<TokenType> operators =
+        std::set<TokenType>{
+            static_cast<TokenType>('+'),
+            static_cast<TokenType>('-'),
+            TokenType::T_DOUBLE_EQUAL};
     return operators.count(c);
 };

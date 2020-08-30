@@ -106,16 +106,20 @@ struct Segment
 
 enum struct TokenType
 {
-    T_UNKNOWN = 256,
+    T_UNKNOWN = 256, // 255 and lower reserved for single character symbols
 
     T_IDENTIFIER,
+
     T_INTEGER_LITERAL,
     T_FLOAT_LITERAL,
     T_STRING_LITERAL,
+    T_FALSE,
+    T_TRUE,
 
     T_COMPILER_DIRECTIVE,
 
     T_ARROW,
+    T_DOUBLE_EQUAL,
 
     T_IF,
     T_ELSE,

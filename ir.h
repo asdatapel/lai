@@ -6,8 +6,8 @@
 #include "lai_type.h"
 
 struct Scope;
+struct IrContainer;
 
-struct IrRoot;
 struct IrInstr;
 struct IrDeclaration;
 struct IrIntegerLiteral;
@@ -31,15 +31,12 @@ struct Scope
     std::vector<IrDeclaration *> declarations;
 };
 
-struct IrContainer
+struct IrContainer : Scope
 {
     std::vector<IrInstr *> instrs;
-};
 
-struct IrRoot
-{
-    Scope *scope = nullptr;
-    IrContainer *body = nullptr;
+    // remove
+    std::vector<IrReturn *> returns;
 };
 
 struct IrInstr
@@ -47,18 +44,19 @@ struct IrInstr
     enum struct Type
     {
         DECLARATION,
-        LABEL,
-        JUMP,
         INTEGER_LITERAL,
         FLOAT_LITERAL,
         FUNCTION,
         FUNCTION_CALL,
         ADD,
         SUB,
+        CMP_EQUAL,
         LOAD,
         STORE,
         CAST,
         RETURN,
+        LABEL,
+        JUMP_IF,
     };
 
     Type type;
@@ -72,11 +70,6 @@ struct IrDeclaration : IrInstr
     IrDeclaration() { type = Type::DECLARATION; }
     Segment name;
     IrInstr *initializer = nullptr;
-};
-
-struct IrLabel : IrInstr
-{
-    IrLabel() { type = Type::LABEL; }
 };
 
 struct IrIntegerLiteral : IrInstr
@@ -101,16 +94,12 @@ struct IrFloatLiteral : IrInstr
     double value = 0.0;
 };
 
-struct IrFunction : IrInstr, Scope
+struct IrFunction : IrInstr, IrContainer
 {
     IrFunction() { type = Type::FUNCTION; }
 
     // remove
-    std::vector<IrReturn *> returns;
     std::vector<IrDeclaration *> parameters;
-    // remove
-
-    IrContainer *body = nullptr;
 };
 
 struct IrFunctionCall : IrInstr
@@ -130,6 +119,17 @@ struct IrAdd : IrInstr
 struct IrSub : IrInstr
 {
     IrSub() { type = Type::SUB; }
+    IrInstr *lhs = nullptr;
+    IrInstr *rhs = nullptr;
+};
+
+struct IrCmpEqual : IrInstr
+{
+    IrCmpEqual()
+    {
+        type = Type::CMP_EQUAL;
+        laiType = &builtinTypeBool;
+    }
     IrInstr *lhs = nullptr;
     IrInstr *rhs = nullptr;
 };
@@ -159,15 +159,30 @@ struct IrReturn : IrInstr
     IrInstr *value = nullptr;
 };
 
-IrRoot *irify(Ast_BlockStatement *);
-IrContainer *irifyBlock(Ast_BlockStatement, IrFunction *function, IrContainer *parent, IrContainer *existingContainer = nullptr);
-IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *, Scope *scope);
-IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *,  Scope *scope, IrContainer *ir);
-IrInstr *irifyExpression(Ast_Expression *, Scope *, IrContainer *, bool wantRef = false);
-IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *,  Scope *scope, IrContainer *ir);
-IrInstr *irifyBinaryMathOp(IrInstr *, IrInstr *, char,  Scope *scope, IrContainer *ir);
-IrInstr *promote(IrInstr *, LaiType *, Scope *scope, IrContainer *ir);
+struct IrLabel : IrInstr
+{
+    IrLabel() { type = Type::LABEL; }
+};
+
+struct IrJumpIf : IrInstr
+{
+    IrJumpIf() { type = Type::JUMP_IF; }
+    IrInstr *condition = nullptr;
+    IrInstr *inside = nullptr;
+    IrInstr *outside = nullptr;
+};
+
+IrContainer *irify(Ast_BlockStatement *);
+void irifyStatement(Ast_Statement *, IrContainer *, Scope *);
+Scope *irifyBlock(Ast_BlockStatement *, IrContainer *, Scope *, Scope *existingScope = nullptr);
+IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *, Scope *);
+IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *, IrContainer *, Scope *);
+IrInstr *irifyExpression(Ast_Expression *, IrContainer *, Scope *, bool wantRef = false);
+IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *, IrContainer *, Scope *);
+IrInstr *irifyBinaryMathOp(IrInstr *, IrInstr *, TokenType, IrContainer *, Scope *);
+IrInstr *promote(IrInstr *, LaiType *, IrContainer *, Scope *);
 IrInstr *createLoad(IrInstr *);
+IrInstr *findVar(Segment name, Scope *scope);
 
 LaiType *parseType(Ast_Expression *);
 LaiType *resolvePointerToType(LaiType *);
@@ -176,11 +191,9 @@ LaiType *resolveDereferenceType(LaiType *);
 LaiType *resolveIntegerType(long long);
 LaiType *resolveFloatType(double);
 
-IrRoot *irify(Ast_BlockStatement *rootAst)
+IrContainer *irify(Ast_BlockStatement *rootAst)
 {
-    auto root = new IrRoot;
-    root->scope = new Scope;
-    root->body = new IrContainer;
+    auto root = new IrContainer;
 
     for (auto statement : rootAst->body)
     {
@@ -190,11 +203,10 @@ IrRoot *irify(Ast_BlockStatement *rootAst)
         {
             auto st = (Ast_DeclarationStatement *)statement;
 
-            auto dec = irifyDeclaration(st, root->scope, root->body);
-            root->scope->declarations.push_back(dec);
+            auto dec = irifyDeclaration(st, root, root);
             if (dec->initializer)
             {
-                root->body->instrs.push_back(dec);
+                root->instrs.push_back(dec);
             }
         }
         break;
@@ -218,15 +230,21 @@ IrRoot *irify(Ast_BlockStatement *rootAst)
     return root;
 }
 
-IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, Scope *scope, IrContainer *ir)
+IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, IrContainer *ir, Scope *scope)
 {
     auto dec = new IrDeclaration;
     dec->name = st->identifiers[0]->identifier;
 
+    ir->declarations.push_back(dec);
+    if (ir != scope)
+    {
+        scope->declarations.push_back(dec);
+    }
+
     auto declType = parseType(st->explicitType);
     dec->laiType = resolvePointerToType(declType); // set type for initializer
 
-    IrInstr *initializer = irifyExpression(st->value, scope, ir);
+    IrInstr *initializer = irifyExpression(st->value, ir, scope);
 
     if (!declType)
     {
@@ -242,12 +260,63 @@ IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, Scope *scope, IrCo
     if (initializer)
     {
         // @VALIDATE declType and initializer type should match
-        dec->initializer = promote(initializer, declType, scope, ir);
+        dec->initializer = promote(initializer, declType, ir, scope);
     }
     return dec;
 }
 
-Scope *irifyBlock(Ast_BlockStatement *exp, IrFunction *function, Scope *parent, Scope *existingScope)
+void irifyStatement(Ast_Statement *statement, IrContainer *ir, Scope *scope)
+{
+    switch (statement->type)
+    {
+    case Ast_Statement::Type::DECLARATION:
+    {
+        auto st = (Ast_DeclarationStatement *)statement;
+
+        auto dec = irifyDeclaration(st, ir, scope);
+        if (dec->initializer)
+        {
+            auto irStore = new IrStore;
+            irStore->target = dec;
+            irStore->value = dec->initializer;
+            ir->instrs.push_back(irStore);
+        }
+    }
+    break;
+    case Ast_Statement::Type::BLOCK:
+    {
+        auto st = (Ast_BlockStatement *)statement;
+        irifyBlock(st, ir, scope, nullptr);
+    }
+    break;
+    case Ast_Statement::Type::EXPRESSION:
+    {
+        auto st = (Ast_ExpressionStatement *)statement;
+
+        if (auto value = irifyExpression(st->value, ir, scope))
+        {
+            // @TODO pushing should be done within irifyExpression???
+            ir->instrs.push_back(value);
+        }
+    }
+    break;
+    case Ast_Statement::Type::RETURN:
+    {
+        auto st = (Ast_ReturnStatement *)statement;
+
+        auto value = irifyExpression(st->value, ir, scope);
+        ir->instrs.push_back(value);
+
+        auto irReturn = new IrReturn;
+        irReturn->value = value;
+        ir->returns.push_back(irReturn);
+        ir->instrs.push_back(irReturn);
+    }
+    break;
+    };
+}
+
+Scope *irifyBlock(Ast_BlockStatement *exp, IrContainer *ir, Scope *parent, Scope *existingScope)
 {
     Scope *scope;
     if (existingScope)
@@ -262,55 +331,7 @@ Scope *irifyBlock(Ast_BlockStatement *exp, IrFunction *function, Scope *parent, 
 
     for (int i = 0; i < exp->body.size(); i++)
     {
-        auto statement = exp->body[i];
-        switch (statement->type)
-        {
-        case Ast_Statement::Type::DECLARATION:
-        {
-            auto st = (Ast_DeclarationStatement *)statement;
-
-            auto dec = irifyDeclaration(st, scope, function->body);
-            function->declarations.push_back(dec);
-            scope->declarations.push_back(dec);
-            if (dec->initializer)
-            {
-                auto irStore = new IrStore;
-                irStore->target = dec;
-                irStore->value = dec->initializer;
-                function->body->instrs.push_back(irStore);
-            }
-        }
-        break;
-        case Ast_Statement::Type::BLOCK:
-        {
-            auto st = (Ast_BlockStatement *)statement;
-            irifyBlock(st, function, existingScope, nullptr);
-        }
-        break;
-        case Ast_Statement::Type::EXPRESSION:
-        {
-            auto st = (Ast_ExpressionStatement *)statement;
-
-            if (auto value = irifyExpression(st->value, scope, function->body))
-            {
-                // @TODO pushing should be done within irifyExpression???
-                function->body->instrs.push_back(value);
-            }
-        }
-        break;
-        case Ast_Statement::Type::RETURN:
-        {
-            auto st = (Ast_ReturnStatement *)statement;
-
-            auto value = irifyExpression(st->value, scope, function->body);
-
-            auto irReturn = new IrReturn;
-            irReturn->value = value;
-            function->returns.push_back(irReturn);
-            function->body->instrs.push_back(irReturn);
-        }
-        break;
-        };
+        irifyStatement(exp->body[i], ir, scope);
     }
 
     return scope;
@@ -322,7 +343,7 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, Scope *parent)
 
     auto irFunction = new IrFunction;
     irFunction->laiType = functionType;
-    irFunction->body = new IrContainer;
+    irFunction->parent = parent;
 
     for (auto p : exp->header->parameters)
     {
@@ -352,7 +373,7 @@ IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *exp, Scope *parent)
     return irFunction;
 }
 
-IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *ir, bool wantRef)
+IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *scope, bool wantRef)
 {
     if (!expression)
     {
@@ -370,6 +391,15 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
 
         return ir;
     }
+    case Ast_Expression::Type::BOOLEAN_LITERAL:
+    {
+        auto exp = (Ast_BooleanExpression *)expression;
+
+        auto ir = new IrIntegerLiteral(exp->value ? 1 : 0);
+        ir->laiType = &builtinTypeBool;
+        return ir;
+    }
+    break;
     case Ast_Expression::Type::FLOAT_LITERAL:
     {
         auto exp = (Ast_FloatingPointLiteralExpression *)expression;
@@ -387,20 +417,23 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
     {
         auto exp = (Ast_VariableExpression *)expression;
 
-        for (auto dec : scope->declarations)
+        auto var = findVar(exp->identifier, scope);
+
+        if (!var)
         {
-            if (exp->identifier.equals(dec->name))
-            {
-                return wantRef ? dec : createLoad(dec);
-            }
+            // @VALIDATE error
+            std::cout << "asdasd"
+                      << "\n";
         }
+
+        return wantRef ? var : createLoad(var);
     }
     break;
     case Ast_Expression::Type::UNARY_OPERATION:
     {
         auto exp = (Ast_UnaryOperatorExpression *)expression;
 
-        auto operand = irifyExpression(exp->operand, scope, ir);
+        auto operand = irifyExpression(exp->operand, ir, scope);
         assert(operand);
 
         ir->instrs.push_back(operand);
@@ -421,15 +454,15 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
     case Ast_Expression::Type::BINARY_OPERATION:
     {
         auto exp = (Ast_BinaryOperatorExpression *)expression;
-        return irifyBinaryOp(exp, scope, ir);
+        return irifyBinaryOp(exp, ir, scope);
     }
     break;
     case Ast_Expression::Type::ASSIGNMENT:
     {
         auto exp = (Ast_AssignmentExpression *)expression;
 
-        auto lhs = irifyExpression(exp->lhs, scope, ir, true);
-        auto rhs = irifyExpression(exp->rhs, scope, ir);
+        auto lhs = irifyExpression(exp->lhs, ir, scope, true);
+        auto rhs = irifyExpression(exp->rhs, ir, scope);
         assert(lhs);
         assert(rhs);
 
@@ -458,7 +491,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
     {
         auto exp = (Ast_FunctionCallExpression *)expression;
 
-        auto function = irifyExpression(exp->function, scope, ir);
+        auto function = irifyExpression(exp->function, ir, scope);
         if (function->laiType->laiTypeType != LaiTypeType::FUNCTION)
         {
             error("attempting a function call with a nonfunction type");
@@ -475,11 +508,29 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
         irFunctionCall->laiType = functionType->returnType;
         for (int i = 0; i < exp->arguments.size(); i++)
         {
-            auto promoted = promote(irifyExpression(exp->arguments[i], scope, ir), functionType->parameters[i], scope, ir);
+            auto promoted = promote(irifyExpression(exp->arguments[i], ir, scope), functionType->parameters[i], ir, scope);
             irFunctionCall->arguments.push_back(promoted);
         }
 
         return irFunctionCall;
+    }
+    break;
+    case Ast_Expression::Type::IF:
+    {
+        auto exp = (Ast_IfExpression *)expression;
+
+        auto condition = irifyExpression(exp->condition, ir, scope);
+        ir->instrs.push_back(condition);
+
+        auto irJump = new IrJumpIf;
+        irJump->condition = condition;
+        irJump->inside = new IrLabel;
+        irJump->outside = new IrLabel;
+        ir->instrs.push_back(irJump);
+
+        ir->instrs.push_back(irJump->inside);
+        irifyStatement(exp->body, ir, scope);
+        ir->instrs.push_back(irJump->outside);
     }
     break;
     }
@@ -487,10 +538,10 @@ IrInstr *irifyExpression(Ast_Expression *expression, Scope *scope, IrContainer *
     return nullptr;
 }
 
-IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, Scope *scope, IrContainer *ir)
+IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, IrContainer *ir, Scope *scope)
 {
-    auto lhs = irifyExpression(exp->leftOperand, scope, ir);
-    auto rhs = irifyExpression(exp->rightOperand, scope, ir);
+    auto lhs = irifyExpression(exp->leftOperand, ir, scope);
+    auto rhs = irifyExpression(exp->rightOperand, ir, scope);
     assert(lhs);
     assert(rhs);
 
@@ -500,21 +551,21 @@ IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, Scope *scope, IrContai
     if ((lhs->laiType->laiTypeType == LaiTypeType::INTEGER || lhs->laiType->laiTypeType == LaiTypeType::FLOAT) &&
         (rhs->laiType->laiTypeType == LaiTypeType::INTEGER || rhs->laiType->laiTypeType == LaiTypeType::FLOAT))
     {
-        return irifyBinaryMathOp(lhs, rhs, exp->operatorSymbol, scope, ir);
+        return irifyBinaryMathOp(lhs, rhs, exp->operatorSymbol, ir, scope);
     }
 
     return nullptr;
 }
 
-IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, char op, Scope *scope, IrContainer *ir)
+IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer *ir, Scope *scope)
 {
     auto promotionType = resolvePromotionType(lhs, rhs);
-    lhs = promote(lhs, promotionType, scope, ir);
-    rhs = promote(rhs, promotionType, scope, ir);
+    lhs = promote(lhs, promotionType, ir, scope);
+    rhs = promote(rhs, promotionType, ir, scope);
 
     switch (op)
     {
-    case '+':
+    case static_cast<TokenType>('+'):
     {
         auto irAdd = new IrAdd;
         irAdd->lhs = lhs;
@@ -522,7 +573,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, char op, Scope *scope, Ir
         irAdd->laiType = lhs->laiType;
         return irAdd;
     }
-    case '-':
+    case static_cast<TokenType>('-'):
     {
         auto irSub = new IrSub;
         irSub->lhs = lhs;
@@ -530,12 +581,19 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, char op, Scope *scope, Ir
         irSub->laiType = lhs->laiType;
         return irSub;
     }
+    case TokenType::T_DOUBLE_EQUAL:
+    {
+        auto irCmpEqual = new IrCmpEqual;
+        irCmpEqual->lhs = lhs;
+        irCmpEqual->rhs = rhs;
+        return irCmpEqual;
+    }
     break;
     }
 }
 
-// @TODO this should push the cast instr to the container
-IrInstr *promote(IrInstr *val, LaiType *type, Scope *scope, IrContainer *ir)
+// @TODO this should push the cast instr to the container???
+IrInstr *promote(IrInstr *val, LaiType *type, IrContainer *ir, Scope *scope)
 {
     if ((val->laiType->laiTypeType != LaiTypeType::INTEGER && val->laiType->laiTypeType != LaiTypeType::FLOAT) || val->laiType == type)
     {
@@ -554,6 +612,24 @@ IrInstr *createLoad(IrInstr *ptr)
     irLoad->laiType = resolveDereferenceType(ptr->laiType);
 
     return irLoad;
+}
+
+IrInstr *findVar(Segment name, Scope *scope)
+{
+    if (!scope)
+    {
+        return nullptr;
+    }
+
+    for (auto dec : scope->declarations)
+    {
+        if (name.equals(dec->name))
+        {
+            return dec;
+        }
+    }
+
+    return findVar(name, scope->parent);
 }
 
 LaiType *parseVariableType(Ast_VariableExpression *expression)

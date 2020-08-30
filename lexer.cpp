@@ -41,6 +41,14 @@ Token createTokenKeywordOrIdentifier(const Segment &file, LexerMetadata &meta)
     {
         t.type = TokenType::T_ELSE;
     }
+    else if (builder.equals("true"))
+    {
+        t.type = TokenType::T_TRUE;
+    }
+    else if (builder.equals("false"))
+    {
+        t.type = TokenType::T_FALSE;
+    }
     else
     {
         t.type = TokenType::T_IDENTIFIER;
@@ -191,16 +199,21 @@ Token Lexer::nextToken()
 
     if (file.data[meta.currentIndex] == '-' && file.data[meta.currentIndex + 1] == '>')
     {
-        Segment builder;
-        builder.data = file.data + meta.currentIndex;
-        builder.length = 0;
-
-        builder.length += 2; // swallow '->'
-        meta.currentIndex += 2;
+        meta.currentIndex += 2; // swallow '->'
         meta.currentColumn += 2;
 
         Token t;
         t.type = TokenType::T_ARROW;
+        return t;
+    }
+
+    if (file.data[meta.currentIndex] == '=' && file.data[meta.currentIndex + 1] == '=')
+    {
+        meta.currentIndex += 2; // swallow '=='
+        meta.currentColumn += 2;
+
+        Token t;
+        t.type = TokenType::T_DOUBLE_EQUAL;
         return t;
     }
 

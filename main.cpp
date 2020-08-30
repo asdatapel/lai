@@ -87,7 +87,7 @@ std::string printExpression(Ast_Expression *expression, int depth)
     case Ast_Expression::Type::BINARY_OPERATION:
     {
         auto exp = (Ast_BinaryOperatorExpression *)expression;
-        return indent(depth) + "{ type : \"BINARY_OPERATION\", operator: \"" + exp->operatorSymbol +
+        return indent(depth) + "{ type : \"BINARY_OPERATION\", operator: \"" + static_cast<char>(exp->operatorSymbol) +
                "\", left_operand: " + printExpression(exp->leftOperand, depth + 1) +
                ", right_operand: \n" + printExpression(exp->rightOperand, depth + 1) +
                "}";

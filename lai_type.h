@@ -61,7 +61,9 @@ struct LaiType_Pointer : LaiType
 };
 
 ////////////////// Builtins //////////
-static LaiType_Integer builtinTypeChar(8, false);
+static LaiType_Integer builtinTypeBool(32, false);
+static LaiType_Integer builtinTypeI8(8, false);
+static LaiType_Integer builtinTypeS8(8, true);
 static LaiType_Integer builtinTypeI32(32, false);
 static LaiType_Integer builtinTypeS32(32, true);
 static LaiType_Float builtinTypeF32(32);
@@ -70,6 +72,10 @@ static LaiType_Float builtinTypeF64(64);
 
 LaiType *parseBuiltinType(Segment identifier)
 {
+    if (identifier.equals("bool"))
+    {
+        return &builtinTypeBool;
+    }
     if (identifier.equals("i32"))
     {
         return &builtinTypeI32;

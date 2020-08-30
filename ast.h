@@ -59,6 +59,7 @@ struct Ast_Expression
     enum struct Type
     {
         INTEGER_LITERAL,
+        BOOLEAN_LITERAL,
         FLOAT_LITERAL,
         STRING_LITERAL,
         VARIABLE,
@@ -79,6 +80,12 @@ struct Ast_IntegerLiteralExpression : Ast_Expression
     Ast_IntegerLiteralExpression() { type = Type::INTEGER_LITERAL; };
 
     long long number = 0;
+};
+struct Ast_BooleanExpression : Ast_Expression
+{
+    Ast_BooleanExpression() { type = Type::BOOLEAN_LITERAL; };
+
+    bool value = false;
 };
 struct Ast_FloatingPointLiteralExpression : Ast_Expression
 {
@@ -116,7 +123,7 @@ struct Ast_BinaryOperatorExpression : Ast_Expression
 {
     Ast_BinaryOperatorExpression() { type = Type::BINARY_OPERATION; };
 
-    char operatorSymbol = 0;
+    TokenType operatorSymbol = TokenType::T_UNKNOWN;
     Ast_Expression *leftOperand = nullptr;
     Ast_Expression *rightOperand = nullptr;
 };
@@ -145,5 +152,6 @@ struct Ast_IfExpression : Ast_Expression
 {
     Ast_IfExpression() { type = Type::IF; };
 
+    Ast_Expression *condition = nullptr;
     Ast_Statement *body = nullptr;
 };

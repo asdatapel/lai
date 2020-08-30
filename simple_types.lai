@@ -1,22 +1,11 @@
-d : s32 = -24;
-header : (s1: s32, i1: i32, s2: s32) -> s32;
-
-func2 :: (s1: s32, s2: f64) {
-    inside_func :: (s1: f64, s2: s32) -> f64 {
-        m1 : s32 = s2;
-        return m1 + s2;
-    };
-
-    header : (s1: f64, s2: s32) -> f64;
-
-    {
-        bm : s32 = 21321;
-        return bm;
+fib : (n : i32) -> i32 : (n : i32) -> i32 {
+    if n == 0 {    
+        return n;
     }
-
-    header = inside_func;
-    return header(s2, s1);
+    if n == 1 {    
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
 };
 
-vv: s32 = c;
-e : s32 = func2(12, 3.3339999999999999);
+x : i32 = fib(13);

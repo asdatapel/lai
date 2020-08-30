@@ -10,13 +10,13 @@
 #include "ir.h"
 
 void codegenModule(IrContainer *);
-void codegenValue(IrInstr *, llvm::BasicBlock *, llvm::Module &);
-llvm::Value *codegenCast(IrCast *instr, llvm::BasicBlock *, llvm::Module &);
+llvm::BasicBlock *codegenValue(IrInstr *, llvm::BasicBlock *, llvm::Function *, llvm::Module &);
+llvm::Value *codegenCast(IrCast *instr, llvm::BasicBlock *, llvm::Function *, llvm::Module &);
 llvm::Function *codegenFunction(IrFunction *, llvm::Module &);
 llvm::Type *toLlvmVarType(LaiType *, llvm::LLVMContext &);
 llvm::FunctionType *toLlvmFunctionType(LaiType *, llvm::LLVMContext &);
 
-void codegenModule(IrRoot *irRoot)
+void codegenModule(IrContainer *irRoot)
 {
     std::string moduleName = "AsadModule";
 
@@ -35,7 +35,7 @@ void codegenModule(IrRoot *irRoot)
     llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(llvmContext, "entry", mainFunction, 0);
     //////////////////////////
 
-    for (auto declaration : irRoot->scope->declarations)
+    for (auto declaration : irRoot->declarations)
     {
         auto global = (IrDeclaration *)declaration;
         auto llvmType = toLlvmVarType(resolveDereferenceType(global->laiType), llvmContext);
@@ -45,13 +45,13 @@ void codegenModule(IrRoot *irRoot)
         global->llvmValue = llvmGlobal;
     }
 
-    for (auto instr : irRoot->body->instrs)
+    for (auto instr : irRoot->instrs)
     {
         if (instr->type == IrInstr::Type::DECLARATION)
         {
             auto irDeclaration = (IrDeclaration *)instr;
 
-            codegenValue(irDeclaration->initializer, entryBlock, module);
+            codegenValue(irDeclaration->initializer, entryBlock, mainFunction, module);
             if (auto init = llvm::dyn_cast<llvm::Constant>(irDeclaration->initializer->llvmValue))
             {
                 ((llvm::GlobalVariable *)irDeclaration->llvmValue)->setInitializer(init);
@@ -64,13 +64,13 @@ void codegenModule(IrRoot *irRoot)
         }
         else
         {
-            codegenValue(instr, entryBlock, module);
+            codegenValue(instr, entryBlock, mainFunction, module);
         }
     }
 
     ////temp main function////
     //////////////////////////
-    auto lastDec = irRoot->scope->declarations[irRoot->scope->declarations.size() - 1]->llvmValue;
+    auto lastDec = irRoot->declarations[irRoot->declarations.size() - 1]->llvmValue;
     auto load = new llvm::LoadInst(lastDec, "", false, entryBlock);
     llvm::ReturnInst::Create(module.getContext(), load, entryBlock);
     //////////////////////////
@@ -83,11 +83,11 @@ void codegenModule(IrRoot *irRoot)
     write_to_file("foo.ll", Str);
 };
 
-void codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Module &module)
+llvm::BasicBlock *codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Function *llvmFunction, llvm::Module &module)
 {
-    if (instr->llvmValue)
+    if (instr->llvmValue && instr->type != IrInstr::Type::LABEL)
     {
-        return; // value has already been codegenned
+        return block; // value has already been codegenned
     }
 
     switch (instr->type)
@@ -117,19 +117,19 @@ void codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Module &module)
         std::vector<llvm::Value *> args;
         for (auto a : irFunctionCall->arguments)
         {
-            codegenValue(a, block, module);
+            codegenValue(a, block, llvmFunction, module);
             args.push_back(a->llvmValue);
         }
 
-        codegenValue(irFunctionCall->function, block, module);
+        codegenValue(irFunctionCall->function, block, llvmFunction, module);
         instr->llvmValue = llvm::CallInst::Create(irFunctionCall->function->llvmValue, args, "", block);
     }
     break;
     case IrInstr::Type::ADD:
     {
         auto irAdd = (IrAdd *)instr;
-        codegenValue(irAdd->lhs, block, module);
-        codegenValue(irAdd->rhs, block, module);
+        codegenValue(irAdd->lhs, block, llvmFunction, module);
+        codegenValue(irAdd->rhs, block, llvmFunction, module);
 
         if (irAdd->laiType->laiTypeType == LaiTypeType::INTEGER)
         {
@@ -144,9 +144,8 @@ void codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Module &module)
     case IrInstr::Type::SUB:
     {
         auto irSub = (IrSub *)instr;
-        codegenValue(irSub->lhs, block, module);
-        codegenValue(irSub->rhs, block, module);
-        instr->llvmValue = llvm::BinaryOperator::Create(llvm::Instruction::Sub, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "sub", block);
+        codegenValue(irSub->lhs, block, llvmFunction, module);
+        codegenValue(irSub->rhs, block, llvmFunction, module);
 
         if (irSub->laiType->laiTypeType == LaiTypeType::INTEGER)
         {
@@ -158,38 +157,75 @@ void codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Module &module)
         }
     }
     break;
+    case IrInstr::Type::CMP_EQUAL:
+    {
+        auto irSub = (IrCmpEqual *)instr;
+        codegenValue(irSub->lhs, block, llvmFunction, module);
+        codegenValue(irSub->rhs, block, llvmFunction, module);
+
+        auto op = (irSub->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (irSub->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OEQ : llvm::CmpInst::Predicate::ICMP_EQ;
+        auto cmp = llvm::CmpInst::Create(op, pred, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
     case IrInstr::Type::LOAD:
     {
         auto irLoad = (IrLoad *)instr;
-        codegenValue(irLoad->value, block, module);
+        codegenValue(irLoad->value, block, llvmFunction, module);
         instr->llvmValue = new llvm::LoadInst(irLoad->value->llvmValue, "", false, block);
     }
     break;
     case IrInstr::Type::STORE:
     {
         auto irStore = (IrStore *)instr;
-        codegenValue(irStore->target, block, module);
-        codegenValue(irStore->value, block, module);
+        codegenValue(irStore->target, block, llvmFunction, module);
+        codegenValue(irStore->value, block, llvmFunction, module);
         instr->llvmValue = new llvm::StoreInst(irStore->value->llvmValue, irStore->target->llvmValue, false, block);
     }
     break;
     case IrInstr::Type::CAST:
     {
         auto irCast = (IrCast *)instr;
-        irCast->llvmValue = codegenCast(irCast, block, module);
+        irCast->llvmValue = codegenCast(irCast, block, llvmFunction, module);
     }
     break;
     case IrInstr::Type::RETURN:
     {
         auto irReturn = (IrReturn *)instr;
-        codegenValue(irReturn->value, block, module);
+        codegenValue(irReturn->value, block, llvmFunction, module);
         instr->llvmValue = llvm::ReturnInst::Create(module.getContext(), irReturn->value->llvmValue, block);
+    }
+    break;
+    case IrInstr::Type::LABEL:
+    {
+        auto irLabel = (IrLabel *)instr;
+
+        // we're expecting the basic block to have already been created by whichever instr references it
+        block = (llvm::BasicBlock *)irLabel->llvmValue;
+    }
+    break;
+    case IrInstr::Type::JUMP_IF:
+    {
+        auto irJumpIf = (IrJumpIf *)instr;
+
+        if (!irJumpIf->inside->llvmValue)
+            irJumpIf->inside->llvmValue = llvm::BasicBlock::Create(module.getContext(), "ifinside", llvmFunction, 0);
+        if (!irJumpIf->outside->llvmValue)
+            irJumpIf->outside->llvmValue = llvm::BasicBlock::Create(module.getContext(), "ifoutside", llvmFunction, 0);
+
+        auto boolCondition = llvm::CmpInst::Create(llvm::Instruction::OtherOps::ICmp, llvm::CmpInst::Predicate::ICMP_NE, irJumpIf->condition->llvmValue,
+                                                   llvm::ConstantInt::get(module.getContext(), llvm::APInt(32, 0, true)), "", block);
+
+        instr->llvmValue = llvm::BranchInst::Create((llvm::BasicBlock *)irJumpIf->inside->llvmValue, (llvm::BasicBlock *)irJumpIf->outside->llvmValue, boolCondition, block);
     }
     break;
     default:
         // @VALIDATE error
         break;
     };
+
+    return block;
 };
 
 llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
@@ -227,17 +263,18 @@ llvm::Function *codegenFunction(IrFunction *irFunction, llvm::Module &module)
         }
     }
 
-    for (auto instr : irFunction->body->instrs)
+    auto currentBlock = entryBlock;
+    for (auto instr : irFunction->instrs)
     {
-        codegenValue(instr, entryBlock, module);
+        currentBlock = codegenValue(instr, currentBlock, llvmFunction, module);
     }
 
     return llvmFunction;
 };
 
-llvm::Value *codegenCast(IrCast *instr, llvm::BasicBlock *block, llvm::Module &module)
+llvm::Value *codegenCast(IrCast *instr, llvm::BasicBlock *block, llvm::Function *llvmFunction, llvm::Module &module)
 {
-    codegenValue(instr->value, block, module);
+    codegenValue(instr->value, block, llvmFunction, module);
 
     if (instr->value->laiType->laiTypeType == instr->laiType->laiTypeType)
     {
@@ -259,7 +296,6 @@ llvm::Value *codegenCast(IrCast *instr, llvm::BasicBlock *block, llvm::Module &m
     }
     else
     {
-
         auto intType = (LaiType_Integer *)instr->laiType;
         if (intType->isSigned)
         {
@@ -281,6 +317,7 @@ llvm::Type *toLlvmVarType(LaiType *type, llvm::LLVMContext &context)
         auto t = (LaiType_Integer *)type;
         return llvm::Type::getIntNTy(context, t->size);
     }
+    break;
     case LaiTypeType::FLOAT:
     {
         auto t = (LaiType_Float *)type;
@@ -293,11 +330,13 @@ llvm::Type *toLlvmVarType(LaiType *type, llvm::LLVMContext &context)
             return llvm::Type::getDoubleTy(context);
         }
     }
+    break;
     case LaiTypeType::POINTER:
     {
         auto t = (LaiType_Pointer *)type;
         return toLlvmVarType(t->pointeeType, context)->getPointerTo();
     }
+    break;
     case LaiTypeType::FUNCTION:
     {
         return toLlvmFunctionType(type, context)->getPointerTo();
