@@ -9,8 +9,8 @@ enum struct LaiTypeType
     UNKNOWN, // ERROR?
     FLOAT,
     INTEGER,
-    FUNCTION,
     POINTER,
+    FUNCTION,
 };
 
 struct LaiType
@@ -66,6 +66,8 @@ static LaiType_Integer builtinTypeI8(8, false);
 static LaiType_Integer builtinTypeS8(8, true);
 static LaiType_Integer builtinTypeI32(32, false);
 static LaiType_Integer builtinTypeS32(32, true);
+static LaiType_Integer builtinTypeI64(64, false);
+static LaiType_Integer builtinTypeS64(64, true);
 static LaiType_Float builtinTypeF32(32);
 static LaiType_Float builtinTypeF64(64);
 //////////////////////////////////////
@@ -76,6 +78,14 @@ LaiType *parseBuiltinType(Segment identifier)
     {
         return &builtinTypeBool;
     }
+    if (identifier.equals("i8"))
+    {
+        return &builtinTypeI8;
+    }
+    if (identifier.equals("s8"))
+    {
+        return &builtinTypeS8;
+    }
     if (identifier.equals("i32"))
     {
         return &builtinTypeI32;
@@ -83,6 +93,14 @@ LaiType *parseBuiltinType(Segment identifier)
     if (identifier.equals("s32"))
     {
         return &builtinTypeS32;
+    }
+    if (identifier.equals("i64"))
+    {
+        return &builtinTypeI64;
+    }
+    if (identifier.equals("s64"))
+    {
+        return &builtinTypeS64;
     }
     if (identifier.equals("f32"))
     {

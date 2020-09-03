@@ -120,6 +120,9 @@ enum struct TokenType
 
     T_ARROW,
     T_DOUBLE_EQUAL,
+    T_NOT_EQUAL,
+    T_GREATER_THAN_EQUAL,
+    T_LESS_THAN_EQUAL,
 
     T_IF,
     T_ELSE,

@@ -1,0 +1,34 @@
+
+
+ - more comparison operators (>, <, >=, <=, !=) -- DONE
+ 
+ - operator precedence
+ - pointers
+ - strings
+ - arrays 
+ - control flow
+    - else / else if
+    - condition formatting (parenthesis?)
+    - basic 'for' and 'while' loops
+ - better type system for primitives
+    - complete this before moving on to structs
+ - fix type inference (especially for recursive functions)
+ - errors and messaging
+ - importing files
+ - external libs support (should be easy? just allow for external vars and functions)
+ - designated main function
+ - unicode
+ - 'if' as an expressions
+ - polymorphism
+ - proper initialization (with optional non init)
+ - closures and currying
+
+Stretch goals:
+ - out of order references (i.e declaration shouldn't have to come before use, at least at global scope)
+ - runtime type info
+ - struct with templating
+ - debug symbols
+ - better memory management
+ - compiler profiling
+ - higher quality code generation
+ - implicit args (idea: only grab single implicit arg if it matches implicit arg of calling function)

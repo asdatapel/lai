@@ -50,7 +50,12 @@ struct IrInstr
         FUNCTION_CALL,
         ADD,
         SUB,
-        CMP_EQUAL,
+        CMP_EQ,
+        CMP_NEQ,
+        CMP_LT,
+        CMP_GT,
+        CMP_LTE,
+        CMP_GTE,
         LOAD,
         STORE,
         CAST,
@@ -109,6 +114,16 @@ struct IrFunctionCall : IrInstr
     std::vector<IrInstr *> arguments;
 };
 
+struct IrMathBinaryOp : IrInstr
+{
+    IrMathBinaryOp(Type type)
+    {
+        this->type = type;
+    }
+    IrInstr *lhs = nullptr;
+    IrInstr *rhs = nullptr;
+};
+
 struct IrAdd : IrInstr
 {
     IrAdd() { type = Type::ADD; }
@@ -127,7 +142,7 @@ struct IrCmpEqual : IrInstr
 {
     IrCmpEqual()
     {
-        type = Type::CMP_EQUAL;
+        type = Type::CMP_EQ;
         laiType = &builtinTypeBool;
     }
     IrInstr *lhs = nullptr;
@@ -261,6 +276,7 @@ IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, IrContainer *ir, S
     {
         // @VALIDATE declType and initializer type should match
         dec->initializer = promote(initializer, declType, ir, scope);
+        ir->instrs.push_back(dec->initializer);
     }
     return dec;
 }
@@ -524,6 +540,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
 
         auto irJump = new IrJumpIf;
         irJump->condition = condition;
+
         irJump->inside = new IrLabel;
         irJump->outside = new IrLabel;
         ir->instrs.push_back(irJump);
@@ -573,6 +590,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
         irAdd->laiType = lhs->laiType;
         return irAdd;
     }
+    break;
     case static_cast<TokenType>('-'):
     {
         auto irSub = new IrSub;
@@ -581,12 +599,58 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
         irSub->laiType = lhs->laiType;
         return irSub;
     }
+    break;
+    case static_cast<TokenType>('>'):
+    {
+        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_GT);
+        instr->laiType = &builtinTypeBool;
+        instr->lhs = lhs;
+        instr->rhs = rhs;
+        return instr;
+    }
+    break;
+    case static_cast<TokenType>('<'):
+    {
+        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_LT);
+        instr->laiType = &builtinTypeBool;
+        instr->lhs = lhs;
+        instr->rhs = rhs;
+        return instr;
+    }
+    break;
     case TokenType::T_DOUBLE_EQUAL:
     {
         auto irCmpEqual = new IrCmpEqual;
         irCmpEqual->lhs = lhs;
         irCmpEqual->rhs = rhs;
         return irCmpEqual;
+    }
+    break;
+    case TokenType::T_NOT_EQUAL:
+    {
+        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_NEQ);
+        instr->laiType = &builtinTypeBool;
+        instr->lhs = lhs;
+        instr->rhs = rhs;
+        return instr;
+    }
+    break;
+    case TokenType::T_GREATER_THAN_EQUAL:
+    {
+        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_GTE);
+        instr->laiType = &builtinTypeBool;
+        instr->lhs = lhs;
+        instr->rhs = rhs;
+        return instr;
+    }
+    break;
+    case TokenType::T_LESS_THAN_EQUAL:
+    {
+        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_LTE);
+        instr->laiType = &builtinTypeBool;
+        instr->lhs = lhs;
+        instr->rhs = rhs;
+        return instr;
     }
     break;
     }

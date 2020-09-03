@@ -405,7 +405,9 @@ bool isUnaryOperator(TokenType c)
 {
     const std::set<TokenType> operators =
         std::set<TokenType>{
-            static_cast<TokenType>('-')};
+            static_cast<TokenType>('-'),
+            static_cast<TokenType>('.'),
+            static_cast<TokenType>('*')};
     return operators.count(c);
 };
 
@@ -415,6 +417,11 @@ bool isBinaryOperator(TokenType c)
         std::set<TokenType>{
             static_cast<TokenType>('+'),
             static_cast<TokenType>('-'),
+            static_cast<TokenType>('<'),
+            static_cast<TokenType>('>'),
+            TokenType::T_NOT_EQUAL,
+            TokenType::T_GREATER_THAN_EQUAL,
+            TokenType::T_LESS_THAN_EQUAL,
             TokenType::T_DOUBLE_EQUAL};
     return operators.count(c);
 };

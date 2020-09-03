@@ -157,15 +157,75 @@ llvm::BasicBlock *codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Fu
         }
     }
     break;
-    case IrInstr::Type::CMP_EQUAL:
+    case IrInstr::Type::CMP_EQ:
     {
-        auto irSub = (IrCmpEqual *)instr;
-        codegenValue(irSub->lhs, block, llvmFunction, module);
-        codegenValue(irSub->rhs, block, llvmFunction, module);
+        auto ir = (IrCmpEqual *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
 
-        auto op = (irSub->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
-        auto pred = (irSub->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OEQ : llvm::CmpInst::Predicate::ICMP_EQ;
-        auto cmp = llvm::CmpInst::Create(op, pred, irSub->lhs->llvmValue, irSub->rhs->llvmValue, "", block);
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OEQ : llvm::CmpInst::Predicate::ICMP_EQ;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
+    case IrInstr::Type::CMP_NEQ:
+    {
+        auto ir = (IrMathBinaryOp *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
+
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_ONE : llvm::CmpInst::Predicate::ICMP_NE;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
+    case IrInstr::Type::CMP_GT:
+    {
+        auto ir = (IrMathBinaryOp *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
+
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OGT : llvm::CmpInst::Predicate::ICMP_UGT;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
+    case IrInstr::Type::CMP_GTE:
+    {
+        auto ir = (IrMathBinaryOp *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
+
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OGE : llvm::CmpInst::Predicate::ICMP_UGE;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
+    case IrInstr::Type::CMP_LT:
+    {
+        auto ir = (IrMathBinaryOp *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
+
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OLT : llvm::CmpInst::Predicate::ICMP_ULT;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
+        instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
+    }
+    break;
+    case IrInstr::Type::CMP_LTE:
+    {
+        auto ir = (IrMathBinaryOp *)instr;
+        codegenValue(ir->lhs, block, llvmFunction, module);
+        codegenValue(ir->rhs, block, llvmFunction, module);
+
+        auto op = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::Instruction::OtherOps::FCmp : llvm::Instruction::OtherOps::ICmp;
+        auto pred = (ir->laiType->laiTypeType == LaiTypeType::FLOAT) ? llvm::CmpInst::Predicate::FCMP_OLE : llvm::CmpInst::Predicate::ICMP_ULE;
+        auto cmp = llvm::CmpInst::Create(op, pred, ir->lhs->llvmValue, ir->rhs->llvmValue, "", block);
         instr->llvmValue = llvm::CastInst::Create(llvm::Instruction::CastOps::ZExt, cmp, llvm::Type::getInt32Ty(module.getContext()), "", block);
     }
     break;
@@ -194,14 +254,17 @@ llvm::BasicBlock *codegenValue(IrInstr *instr, llvm::BasicBlock *block, llvm::Fu
     {
         auto irReturn = (IrReturn *)instr;
         codegenValue(irReturn->value, block, llvmFunction, module);
+
         instr->llvmValue = llvm::ReturnInst::Create(module.getContext(), irReturn->value->llvmValue, block);
     }
     break;
     case IrInstr::Type::LABEL:
     {
         auto irLabel = (IrLabel *)instr;
-
         // we're expecting the basic block to have already been created by whichever instr references it
+
+        if (!block->getTerminator())
+            llvm::BranchInst::Create((llvm::BasicBlock *)irLabel->llvmValue, block);
         block = (llvm::BasicBlock *)irLabel->llvmValue;
     }
     break;

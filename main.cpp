@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "llvm_codegen.h"
 #include "parser.h"
+#include "print_ir.h"
 
 std::string indent(int depth)
 {
@@ -162,12 +163,13 @@ int main(int argc, char *argv[])
     //resolveTypes(ast);
 
     //std::cout << ast->statements.size() << std::endl;
-    for (auto s : ast->body)
-    {
-        std::cout << printStatement(s, 0) << std::endl;
-    }
+    // for (auto s : ast->body)
+    // {
+    //     std::cout << printStatement(s, 0) << std::endl;
+    // }
 
     auto ir = irify(ast);
+    printIr(ir);
     codegenModule(ir);
 
     //std::cout << "\n\n\n\n\n";

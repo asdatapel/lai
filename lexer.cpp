@@ -193,7 +193,6 @@ Token Lexer::nextToken()
     }
     if (std::isalpha(file.data[meta.currentIndex]) || file.data[meta.currentIndex] == '_')
     {
-
         return createTokenKeywordOrIdentifier(file, meta);
     }
 
@@ -214,6 +213,33 @@ Token Lexer::nextToken()
 
         Token t;
         t.type = TokenType::T_DOUBLE_EQUAL;
+        return t;
+    }
+    if (file.data[meta.currentIndex] == '!' && file.data[meta.currentIndex + 1] == '=')
+    {
+        meta.currentIndex += 2; // swallow '!='
+        meta.currentColumn += 2;
+
+        Token t;
+        t.type = TokenType::T_NOT_EQUAL;
+        return t;
+    }
+    if (file.data[meta.currentIndex] == '>' && file.data[meta.currentIndex + 1] == '=')
+    {
+        meta.currentIndex += 2; // swallow '>='
+        meta.currentColumn += 2;
+
+        Token t;
+        t.type = TokenType::T_GREATER_THAN_EQUAL;
+        return t;
+    }
+    if (file.data[meta.currentIndex] == '<' && file.data[meta.currentIndex + 1] == '=')
+    {
+        meta.currentIndex += 2; // swallow '<='
+        meta.currentColumn += 2;
+
+        Token t;
+        t.type = TokenType::T_LESS_THAN_EQUAL;
         return t;
     }
 
