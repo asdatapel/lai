@@ -1,11 +1,11 @@
 
 
  - more comparison operators (>, <, >=, <=, !=) -- DONE
+ - pointers -- DONE
  
- - operator precedence
- - pointers
- - strings
  - arrays 
+ - strings
+ - operator precedence
  - control flow
     - else / else if
     - condition formatting (parenthesis?)
@@ -22,6 +22,7 @@
  - polymorphism
  - proper initialization (with optional non init)
  - closures and currying
+ - multiple declarations together (a, b, c := 3;)
 
 Stretch goals:
  - out of order references (i.e declaration shouldn't have to come before use, at least at global scope)
@@ -32,3 +33,10 @@ Stretch goals:
  - compiler profiling
  - higher quality code generation
  - implicit args (idea: only grab single implicit arg if it matches implicit arg of calling function)
+ - Any type
+ - for loops should also be a variable. the variable is used for flow control 
+      example :
+      f := for element : array {
+         if element == 1 continue f;
+         if element == 2 remove f;
+      }

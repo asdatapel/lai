@@ -254,7 +254,7 @@ Ast_Expression *parseTerm(TokenList *tokenList)
         tokenList->eat(); // eat operator
 
         auto exp = new Ast_UnaryOperatorExpression;
-        exp->operand = parseExpression(tokenList);
+        exp->operand = parseTerm(tokenList);
         exp->operatorSymbol = static_cast<char>(token->type);
 
         return exp;

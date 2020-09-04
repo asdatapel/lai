@@ -7,4 +7,12 @@ fib : (n : i32) -> i32 : (n : i32) -> i32 {
     return n;
 };
 
-x : i32 = fib(6);
+fib_indirect := (n : i32, out : *i32) -> i32 {
+    .out = fib(n);
+    return n;
+};
+
+i : i32;
+_ := fib_indirect(6, *i);
+z := i;
+

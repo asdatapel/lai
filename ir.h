@@ -193,6 +193,7 @@ Scope *irifyBlock(Ast_BlockStatement *, IrContainer *, Scope *, Scope *existingS
 IrFunction *irifyFunction(Ast_FunctionDefinitionExpression *, Scope *);
 IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *, IrContainer *, Scope *);
 IrInstr *irifyExpression(Ast_Expression *, IrContainer *, Scope *, bool wantRef = false);
+IrInstr *irifyUnaryOp(Ast_UnaryOperatorExpression *, IrContainer *, Scope *, bool wantRef = false);
 IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *, IrContainer *, Scope *);
 IrInstr *irifyBinaryMathOp(IrInstr *, IrInstr *, TokenType, IrContainer *, Scope *);
 IrInstr *promote(IrInstr *, LaiType *, IrContainer *, Scope *);
@@ -247,17 +248,17 @@ IrContainer *irify(Ast_BlockStatement *rootAst)
 
 IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, IrContainer *ir, Scope *scope)
 {
-    auto dec = new IrDeclaration;
-    dec->name = st->identifiers[0]->identifier;
+    auto decl = new IrDeclaration;
+    decl->name = st->identifiers[0]->identifier;
 
-    ir->declarations.push_back(dec);
+    ir->declarations.push_back(decl);
     if (ir != scope)
     {
-        scope->declarations.push_back(dec);
+        scope->declarations.push_back(decl);
     }
 
     auto declType = parseType(st->explicitType);
-    dec->laiType = resolvePointerToType(declType); // set type for initializer
+    decl->laiType = resolvePointerToType(declType); // set type for initializer
 
     IrInstr *initializer = irifyExpression(st->value, ir, scope);
 
@@ -271,14 +272,14 @@ IrDeclaration *irifyDeclaration(Ast_DeclarationStatement *st, IrContainer *ir, S
         declType = initializer->laiType;
     }
 
-    dec->laiType = resolvePointerToType(declType);
+    decl->laiType = resolvePointerToType(declType);
     if (initializer)
     {
         // @VALIDATE declType and initializer type should match
-        dec->initializer = promote(initializer, declType, ir, scope);
-        ir->instrs.push_back(dec->initializer);
+        decl->initializer = promote(initializer, declType, ir, scope);
+        ir->instrs.push_back(decl->initializer);
     }
-    return dec;
+    return decl;
 }
 
 void irifyStatement(Ast_Statement *statement, IrContainer *ir, Scope *scope)
@@ -407,6 +408,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
 
         return ir;
     }
+    break;
     case Ast_Expression::Type::BOOLEAN_LITERAL:
     {
         auto exp = (Ast_BooleanExpression *)expression;
@@ -434,37 +436,13 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
         auto exp = (Ast_VariableExpression *)expression;
 
         auto var = findVar(exp->identifier, scope);
-
-        if (!var)
-        {
-            // @VALIDATE error
-            std::cout << "asdasd"
-                      << "\n";
-        }
-
         return wantRef ? var : createLoad(var);
     }
     break;
     case Ast_Expression::Type::UNARY_OPERATION:
     {
         auto exp = (Ast_UnaryOperatorExpression *)expression;
-
-        auto operand = irifyExpression(exp->operand, ir, scope);
-        assert(operand);
-
-        ir->instrs.push_back(operand);
-
-        switch (exp->operatorSymbol)
-        {
-        case '-':
-        {
-            auto irSub = new IrSub;
-            irSub->lhs = new IrIntegerLiteral(0); // @TODO maybe this should find the type of rhs, and use that type's zero-val
-            irSub->rhs = operand;
-            return irSub;
-        }
-        break;
-        }
+        return irifyUnaryOp(exp, ir, scope, wantRef);
     }
     break;
     case Ast_Expression::Type::BINARY_OPERATION:
@@ -553,6 +531,37 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
     }
 
     return nullptr;
+}
+
+IrInstr *irifyUnaryOp(Ast_UnaryOperatorExpression *exp, IrContainer *ir, Scope *scope, bool wantRef)
+{
+    switch (exp->operatorSymbol)
+    {
+    case '-':
+    {
+        auto operand = irifyExpression(exp->operand, ir, scope);
+        ir->instrs.push_back(operand);
+        
+        auto irSub = new IrSub;
+        irSub->lhs = new IrIntegerLiteral(0); // @TODO maybe this should find the type of rhs, and use that type's zero-val
+        irSub->rhs = operand;
+        return irSub;
+    }
+    break;
+    case '*':
+    {
+        return irifyExpression(exp->operand, ir, scope, true);
+    }
+    break;
+    case '.':
+    {
+        auto operand = irifyExpression(exp->operand, ir, scope);
+        ir->instrs.push_back(operand);
+
+        return wantRef ? operand : createLoad(operand);
+    }
+    break;
+    }
 }
 
 IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, IrContainer *ir, Scope *scope)
@@ -698,6 +707,7 @@ IrInstr *findVar(Segment name, Scope *scope)
 
 LaiType *parseVariableType(Ast_VariableExpression *expression)
 {
+    
     return parseBuiltinType(expression->identifier);
 }
 LaiType *parseFunctionType(Ast_FunctionHeaderExpression *expression)
@@ -729,6 +739,18 @@ LaiType *parseType(Ast_Expression *expression)
     {
         auto exp = (Ast_FunctionHeaderExpression *)expression;
         return parseFunctionType(exp);
+    }
+    break;
+    case Ast_Expression::Type::UNARY_OPERATION:
+    {
+        auto exp = (Ast_UnaryOperatorExpression *)expression;
+
+        if (exp->operatorSymbol != '*'){
+            // @VALIDATE something has gone wrong
+        }
+
+        auto childType = parseType(exp->operand);
+        return resolvePointerToType(childType);
     }
     break;
     }

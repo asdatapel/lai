@@ -9,10 +9,11 @@ struct Segment
 
     bool equals(Segment &other)
     {
-        if (length != other.length){
+        if (length != other.length)
+        {
             return false;
         }
-        
+
         for (int i = 0; i < length; ++i)
         {
             if (data[i] != other.data[i])
@@ -24,13 +25,16 @@ struct Segment
 
     bool equals(const char *val)
     {
-        for (int i = 0; i < length; ++i)
+        int i = 0;
+        while (i < length)
         {
             if (data[i] != val[i])
                 return false;
+
+            i++;
         }
 
-        return true;
+        return val[i] == '\0';
     };
 
     std::string toString()
