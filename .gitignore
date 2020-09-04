@@ -2,3 +2,8 @@
 *.exe
 *.ilk
 *.pdb
+LLVM/*
+lai/*
+llvm-10.0.0/*
+llvm-debug/*
+llvm-release/*
