@@ -69,6 +69,7 @@ struct Ast_Expression
         FUNCTION_HEADER,
         FUNCTION_DEFINITION,
         FUNCTION_CALL,
+        INDEX,
         IF,
     };
 
@@ -147,6 +148,13 @@ struct Ast_FunctionCallExpression : Ast_Expression
 
     Ast_Expression *function = nullptr;
     std::vector<Ast_Expression *> arguments;
+};
+struct Ast_IndexExpression : Ast_Expression
+{
+    Ast_IndexExpression() { type = Type::INDEX; };
+
+    Ast_Expression *oprand = nullptr;
+    Ast_Expression *index = nullptr;
 };
 struct Ast_IfExpression : Ast_Expression
 {

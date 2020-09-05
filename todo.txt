@@ -23,6 +23,7 @@
  - proper initialization (with optional non init)
  - closures and currying
  - multiple declarations together (a, b, c := 3;)
+ - variadic function args                                                                                                                                                                                                                                                                                                                                                                                                                            
 
 Stretch goals:
  - out of order references (i.e declaration shouldn't have to come before use, at least at global scope)
