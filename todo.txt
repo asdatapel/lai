@@ -2,16 +2,17 @@
 
  - more comparison operators (>, <, >=, <=, !=) -- DONE
  - pointers -- DONE
+ - arrays -- DONE
  
- - arrays 
  - strings
  - operator precedence
+ - better type system for primitives
+    - complete this before moving on to structs
+ - constants
  - control flow
     - else / else if
     - condition formatting (parenthesis?)
     - basic 'for' and 'while' loops
- - better type system for primitives
-    - complete this before moving on to structs
  - fix type inference (especially for recursive functions)
  - errors and messaging
  - importing files

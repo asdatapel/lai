@@ -4,60 +4,72 @@
 
 #include "misc_types.h"
 
-enum struct LaiTypeType
-{
-    UNKNOWN, // ERROR?
-    FLOAT,
-    INTEGER,
-    POINTER,
-    FUNCTION,
-};
-
 struct LaiType
 {
-    LaiTypeType laiTypeType;
+    enum struct Tag
+    {
+        UNKNOWN, // ERROR?
+        FLOAT,
+        INTEGER,
+        POINTER,
+        FUNCTION,
+        ARRAY,
+    };
+    
+    Tag tag;
+    uint8_t byte_size;
 };
 struct LaiType_Unknown : LaiType
 {
-    LaiType_Unknown() { laiTypeType = LaiTypeType::UNKNOWN; };
+    LaiType_Unknown() { tag = Tag::UNKNOWN; };
 };
 struct LaiType_Number : LaiType
 {
-    uint8_t size = 0;
+    // @TODO do we need this number, or can we use byte_size
+    uint8_t bit_size = 0;
 };
 struct LaiType_Float : LaiType_Number
 {
-    LaiType_Float() { laiTypeType = LaiTypeType::FLOAT; };
-    LaiType_Float(uint8_t size)
+    LaiType_Float() { tag = Tag::FLOAT; };
+    LaiType_Float(uint8_t bit_size)
     {
-        laiTypeType = LaiTypeType::FLOAT;
-        this->size = size;
+        tag = Tag::FLOAT;
+        this->bit_size = bit_size;
+        this->byte_size = bit_size / 8;
     };
 };
 struct LaiType_Integer : LaiType_Number
 {
-    LaiType_Integer() { laiTypeType = LaiTypeType::INTEGER; };
-    LaiType_Integer(uint8_t size, bool isSigned)
+    LaiType_Integer() { tag = Tag::INTEGER; };
+    LaiType_Integer(uint8_t bit_size, bool isSigned)
     {
-        laiTypeType = LaiTypeType::INTEGER;
-        this->size = size;
+        tag = Tag::INTEGER;
+        this->bit_size = bit_size;
+        this->byte_size = bit_size / 8;
         this->isSigned = isSigned;
     };
-
+    
     bool isSigned = false;
 };
 struct LaiType_Function : LaiType
 {
-    LaiType_Function() { laiTypeType = LaiTypeType::FUNCTION; };
-
+    LaiType_Function() { tag = Tag::FUNCTION; };
+    
     std::vector<LaiType *> parameters = {};
     LaiType *returnType = nullptr;
 };
 struct LaiType_Pointer : LaiType
 {
-    LaiType_Pointer() { laiTypeType = LaiTypeType::POINTER; };
-
+    LaiType_Pointer() { tag = Tag::POINTER; };
+    
     LaiType *pointeeType = nullptr;
+};
+struct LaiType_Array : LaiType
+{
+    LaiType_Array() { tag = Tag::ARRAY; };
+    
+    LaiType *memberType = nullptr;
+    uint32_t size = 0;
 };
 
 ////////////////// Builtins //////////

@@ -41,30 +41,32 @@ struct IrContainer : Scope
 
 struct IrInstr
 {
-    enum struct Type
+    enum struct Tag
     {
-        DECLARATION,
         INTEGER_LITERAL,
         FLOAT_LITERAL,
+        STRING_LITERAL,
+        DECLARATION,
         FUNCTION,
+        LOAD,
+        STORE,
+        CAST,
         FUNCTION_CALL,
-        ADD,
-        SUB,
+        INDEX,
+        RETURN,
+        LABEL,
+        JUMP_IF,
         CMP_EQ,
         CMP_NEQ,
         CMP_LT,
         CMP_GT,
         CMP_LTE,
         CMP_GTE,
-        LOAD,
-        STORE,
-        CAST,
-        RETURN,
-        LABEL,
-        JUMP_IF,
+        ADD,
+        SUB,
     };
 
-    Type type;
+    Tag tag;
     LaiType *laiType = nullptr;
 
     llvm::Value *llvmValue = nullptr; // set during codegen
@@ -72,28 +74,34 @@ struct IrInstr
 
 struct IrDeclaration : IrInstr
 {
-    IrDeclaration() { type = Type::DECLARATION; }
+    IrDeclaration() { tag = Tag::DECLARATION; }
     Segment name;
     IrInstr *initializer = nullptr;
 };
 
 struct IrIntegerLiteral : IrInstr
 {
-    IrIntegerLiteral() { type = Type::INTEGER_LITERAL; }
+    IrIntegerLiteral() { tag = Tag::INTEGER_LITERAL; }
     IrIntegerLiteral(long long value)
     {
-        type = Type::INTEGER_LITERAL;
+        tag = Tag::INTEGER_LITERAL;
         this->value = value;
     }
     long long value = 0;
 };
 
+struct IrStringLiteral : IrInstr
+{
+    IrStringLiteral() { tag = Tag::STRING_LITERAL; }
+    Segment value;
+};
+
 struct IrFloatLiteral : IrInstr
 {
-    IrFloatLiteral() { type = Type::FLOAT_LITERAL; }
+    IrFloatLiteral() { tag = Tag::FLOAT_LITERAL; }
     IrFloatLiteral(double value)
     {
-        type = Type::FLOAT_LITERAL;
+        tag = Tag::FLOAT_LITERAL;
         this->value = value;
     }
     double value = 0.0;
@@ -101,7 +109,7 @@ struct IrFloatLiteral : IrInstr
 
 struct IrFunction : IrInstr, IrContainer
 {
-    IrFunction() { type = Type::FUNCTION; }
+    IrFunction() { tag = Tag::FUNCTION; }
 
     // remove
     std::vector<IrDeclaration *> parameters;
@@ -109,16 +117,23 @@ struct IrFunction : IrInstr, IrContainer
 
 struct IrFunctionCall : IrInstr
 {
-    IrFunctionCall() { type = Type::FUNCTION_CALL; }
+    IrFunctionCall() { tag = Tag::FUNCTION_CALL; }
     IrInstr *function = nullptr;
     std::vector<IrInstr *> arguments;
 };
 
+struct IrIndex : IrInstr
+{
+    IrIndex() { tag = Tag::INDEX; }
+    IrInstr *operand;
+    IrInstr *index;
+};
+
 struct IrMathBinaryOp : IrInstr
 {
-    IrMathBinaryOp(Type type)
+    IrMathBinaryOp(Tag tag)
     {
-        this->type = type;
+        this->tag = tag;
     }
     IrInstr *lhs = nullptr;
     IrInstr *rhs = nullptr;
@@ -126,14 +141,14 @@ struct IrMathBinaryOp : IrInstr
 
 struct IrAdd : IrInstr
 {
-    IrAdd() { type = Type::ADD; }
+    IrAdd() { tag = Tag::ADD; }
     IrInstr *lhs = nullptr;
     IrInstr *rhs = nullptr;
 };
 
 struct IrSub : IrInstr
 {
-    IrSub() { type = Type::SUB; }
+    IrSub() { tag = Tag::SUB; }
     IrInstr *lhs = nullptr;
     IrInstr *rhs = nullptr;
 };
@@ -142,7 +157,7 @@ struct IrCmpEqual : IrInstr
 {
     IrCmpEqual()
     {
-        type = Type::CMP_EQ;
+        tag = Tag::CMP_EQ;
         laiType = &builtinTypeBool;
     }
     IrInstr *lhs = nullptr;
@@ -151,37 +166,37 @@ struct IrCmpEqual : IrInstr
 
 struct IrLoad : IrInstr
 {
-    IrLoad() { type = Type::LOAD; }
+    IrLoad() { tag = Tag::LOAD; }
     IrInstr *value = nullptr;
 };
 
 struct IrStore : IrInstr
 {
-    IrStore() { type = Type::STORE; }
+    IrStore() { tag = Tag::STORE; }
     IrInstr *target = nullptr;
     IrInstr *value = nullptr;
 };
 
 struct IrCast : IrInstr
 {
-    IrCast() { type = Type::CAST; }
+    IrCast() { tag = Tag::CAST; }
     IrInstr *value = nullptr;
 };
 
 struct IrReturn : IrInstr
 {
-    IrReturn() { type = Type::RETURN; }
+    IrReturn() { tag = Tag::RETURN; }
     IrInstr *value = nullptr;
 };
 
 struct IrLabel : IrInstr
 {
-    IrLabel() { type = Type::LABEL; }
+    IrLabel() { tag = Tag::LABEL; }
 };
 
 struct IrJumpIf : IrInstr
 {
-    IrJumpIf() { type = Type::JUMP_IF; }
+    IrJumpIf() { tag = Tag::JUMP_IF; }
     IrInstr *condition = nullptr;
     IrInstr *inside = nullptr;
     IrInstr *outside = nullptr;
@@ -429,6 +444,17 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
     break;
     case Ast_Expression::Type::STRING_LITERAL:
     {
+        auto exp = (Ast_StringLiteralExpression *)expression;
+
+        auto arrayType = new LaiType_Array;
+        arrayType->memberType = &builtinTypeI8;
+        arrayType->size = exp->value.length;
+
+        auto instr = new IrStringLiteral;
+        instr->value = exp->value;
+        instr->laiType = resolvePointerToType(arrayType);
+
+        return createLoad(instr);
     }
     break;
     case Ast_Expression::Type::VARIABLE:
@@ -486,7 +512,7 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
         auto exp = (Ast_FunctionCallExpression *)expression;
 
         auto function = irifyExpression(exp->function, ir, scope);
-        if (function->laiType->laiTypeType != LaiTypeType::FUNCTION)
+        if (function->laiType->tag != LaiType::Tag::FUNCTION)
         {
             error("attempting a function call with a nonfunction type");
         }
@@ -507,6 +533,24 @@ IrInstr *irifyExpression(Ast_Expression *expression, IrContainer *ir, Scope *sco
         }
 
         return irFunctionCall;
+    }
+    break;
+    case Ast_Expression::Type::INDEX:
+    {
+        auto exp = (Ast_IndexExpression *)expression;
+
+        auto operand = irifyExpression(exp->operand, ir, scope, true);
+        auto index = irifyExpression(exp->index, ir, scope);
+
+        auto type = (LaiType_Array *)resolveDereferenceType(operand->laiType);
+
+        auto indexInstr = new IrIndex;
+        indexInstr->operand = operand;
+        indexInstr->index = index;
+        indexInstr->laiType = resolvePointerToType(type->memberType);
+        ir->instrs.push_back(indexInstr);
+        
+        return wantRef ? indexInstr : createLoad(indexInstr);
     }
     break;
     case Ast_Expression::Type::IF:
@@ -541,7 +585,7 @@ IrInstr *irifyUnaryOp(Ast_UnaryOperatorExpression *exp, IrContainer *ir, Scope *
     {
         auto operand = irifyExpression(exp->operand, ir, scope);
         ir->instrs.push_back(operand);
-        
+
         auto irSub = new IrSub;
         irSub->lhs = new IrIntegerLiteral(0); // @TODO maybe this should find the type of rhs, and use that type's zero-val
         irSub->rhs = operand;
@@ -574,8 +618,8 @@ IrInstr *irifyBinaryOp(Ast_BinaryOperatorExpression *exp, IrContainer *ir, Scope
     ir->instrs.push_back(lhs);
     ir->instrs.push_back(rhs);
 
-    if ((lhs->laiType->laiTypeType == LaiTypeType::INTEGER || lhs->laiType->laiTypeType == LaiTypeType::FLOAT) &&
-        (rhs->laiType->laiTypeType == LaiTypeType::INTEGER || rhs->laiType->laiTypeType == LaiTypeType::FLOAT))
+    if ((lhs->laiType->tag == LaiType::Tag::INTEGER || lhs->laiType->tag == LaiType::Tag::FLOAT) &&
+        (rhs->laiType->tag == LaiType::Tag::INTEGER || rhs->laiType->tag == LaiType::Tag::FLOAT))
     {
         return irifyBinaryMathOp(lhs, rhs, exp->operatorSymbol, ir, scope);
     }
@@ -611,7 +655,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
     break;
     case static_cast<TokenType>('>'):
     {
-        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_GT);
+        auto instr = new IrMathBinaryOp(IrInstr::Tag::CMP_GT);
         instr->laiType = &builtinTypeBool;
         instr->lhs = lhs;
         instr->rhs = rhs;
@@ -620,7 +664,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
     break;
     case static_cast<TokenType>('<'):
     {
-        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_LT);
+        auto instr = new IrMathBinaryOp(IrInstr::Tag::CMP_LT);
         instr->laiType = &builtinTypeBool;
         instr->lhs = lhs;
         instr->rhs = rhs;
@@ -637,7 +681,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
     break;
     case TokenType::T_NOT_EQUAL:
     {
-        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_NEQ);
+        auto instr = new IrMathBinaryOp(IrInstr::Tag::CMP_NEQ);
         instr->laiType = &builtinTypeBool;
         instr->lhs = lhs;
         instr->rhs = rhs;
@@ -646,7 +690,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
     break;
     case TokenType::T_GREATER_THAN_EQUAL:
     {
-        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_GTE);
+        auto instr = new IrMathBinaryOp(IrInstr::Tag::CMP_GTE);
         instr->laiType = &builtinTypeBool;
         instr->lhs = lhs;
         instr->rhs = rhs;
@@ -655,7 +699,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
     break;
     case TokenType::T_LESS_THAN_EQUAL:
     {
-        auto instr = new IrMathBinaryOp(IrInstr::Type::CMP_LTE);
+        auto instr = new IrMathBinaryOp(IrInstr::Tag::CMP_LTE);
         instr->laiType = &builtinTypeBool;
         instr->lhs = lhs;
         instr->rhs = rhs;
@@ -668,7 +712,7 @@ IrInstr *irifyBinaryMathOp(IrInstr *lhs, IrInstr *rhs, TokenType op, IrContainer
 // @TODO this should push the cast instr to the container???
 IrInstr *promote(IrInstr *val, LaiType *type, IrContainer *ir, Scope *scope)
 {
-    if ((val->laiType->laiTypeType != LaiTypeType::INTEGER && val->laiType->laiTypeType != LaiTypeType::FLOAT) || val->laiType == type)
+    if ((val->laiType->tag != LaiType::Tag::INTEGER && val->laiType->tag != LaiType::Tag::FLOAT) || val->laiType == type)
     {
         return val;
     }
@@ -676,6 +720,7 @@ IrInstr *promote(IrInstr *val, LaiType *type, IrContainer *ir, Scope *scope)
     auto irCast = new IrCast;
     irCast->value = val;
     irCast->laiType = type;
+    return irCast;
 }
 
 IrInstr *createLoad(IrInstr *ptr)
@@ -707,7 +752,7 @@ IrInstr *findVar(Segment name, Scope *scope)
 
 LaiType *parseVariableType(Ast_VariableExpression *expression)
 {
-    
+
     return parseBuiltinType(expression->identifier);
 }
 LaiType *parseFunctionType(Ast_FunctionHeaderExpression *expression)
@@ -745,12 +790,37 @@ LaiType *parseType(Ast_Expression *expression)
     {
         auto exp = (Ast_UnaryOperatorExpression *)expression;
 
-        if (exp->operatorSymbol != '*'){
+        if (exp->operatorSymbol != '*')
+        {
             // @VALIDATE something has gone wrong
         }
 
         auto childType = parseType(exp->operand);
         return resolvePointerToType(childType);
+    }
+    break;
+    case Ast_Expression::Type::INDEX:
+    {
+        auto exp = (Ast_IndexExpression *)expression;
+
+        auto arrayType = new LaiType_Array;
+        switch (exp->index->type)
+        {
+        case Ast_Expression::Type::INTEGER_LITERAL:
+        {
+            arrayType->size = ((Ast_IntegerLiteralExpression *)exp->index)->number;
+        }
+        break;
+        // @TODO: should support more types(as long as theyre constant
+        default:
+        {
+            // @VALIDATE error
+        }
+        break;
+        }
+
+        arrayType->memberType = parseType(exp->operand);
+        return arrayType;
     }
     break;
     }
@@ -767,11 +837,11 @@ LaiType *resolvePointerToType(LaiType *type)
 
 LaiType *resolvePromotionType(IrInstr *lhs, IrInstr *rhs)
 {
-    if (lhs->laiType->laiTypeType == LaiTypeType::FLOAT)
+    if (lhs->laiType->tag == LaiType::Tag::FLOAT)
     {
         return lhs->laiType;
     }
-    if (rhs->laiType->laiTypeType == LaiTypeType::FLOAT)
+    if (rhs->laiType->tag == LaiType::Tag::FLOAT)
     {
         return rhs->laiType;
     }
@@ -783,7 +853,7 @@ LaiType *resolvePromotionType(IrInstr *lhs, IrInstr *rhs)
     {
         return rhs->laiType;
     }
-    if (((LaiType_Integer *)lhs->laiType)->size >= ((LaiType_Integer *)rhs->laiType)->size)
+    if (((LaiType_Integer *)lhs->laiType)->bit_size >= ((LaiType_Integer *)rhs->laiType)->bit_size)
     {
         return lhs->laiType;
     }
@@ -792,8 +862,9 @@ LaiType *resolvePromotionType(IrInstr *lhs, IrInstr *rhs)
 
 LaiType *resolveDereferenceType(LaiType *ptr)
 {
-    if (ptr->laiTypeType != LaiTypeType::POINTER)
+    if (ptr->tag != LaiType::Tag::POINTER)
     {
+        assert(false);
         error("attempting to dereference a nonpointer");
     }
 

@@ -45,9 +45,9 @@ void printIr(IrContainer *container, int indents = 0)
         std::cout << "%" << i << " ";
 
         auto instruction = container->instrs[i];
-        switch (instruction->type)
+        switch (instruction->tag)
         {
-        case IrInstr::Type::CMP_EQ:
+        case IrInstr::Tag::CMP_EQ:
         {
             auto instr = (IrCmpEqual *)instruction;
             std::cout << "CMP_EQUAL ";
@@ -55,7 +55,7 @@ void printIr(IrContainer *container, int indents = 0)
             std::cout << index(container, instr->rhs);
         }
         break;
-        case IrInstr::Type::DECLARATION:
+        case IrInstr::Tag::DECLARATION:
         {
             auto instr = (IrDeclaration *)instruction;
             std::cout << "INIT/STORE ";
@@ -63,21 +63,21 @@ void printIr(IrContainer *container, int indents = 0)
             std::cout << index(container, instr->initializer);
         }
         break;
-        case IrInstr::Type::FLOAT_LITERAL:
+        case IrInstr::Tag::FLOAT_LITERAL:
         {
             auto instr = (IrFloatLiteral *)instruction;
             std::cout << "FLOAT_LITERAL ";
             std::cout << instr->value;
         }
         break;
-        case IrInstr::Type::FUNCTION:
+        case IrInstr::Tag::FUNCTION:
         {
             auto instr = (IrFunction *)instruction;
             std::cout << "FUNCTION ";
             printIr(instr, indents + 1);
         }
         break;
-        case IrInstr::Type::INTEGER_LITERAL:
+        case IrInstr::Tag::INTEGER_LITERAL:
         {
             auto instr = (IrIntegerLiteral *)instruction;
             std::cout << "INTEGER_LITERAL ";

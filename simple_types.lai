@@ -12,7 +12,14 @@ fib_indirect := (n : i32, out : *i32) -> i32 {
     return n;
 };
 
+arrays :: (n : i32) -> s32 {
+    ssss : s32[22];
+    ssss[0] = 2546;
+    asfd := ssss[0] + 3;
+    return asfd;
+};
+
 i : i32;
 _ := fib_indirect(6, *i);
 z := i;
-
+bnmc := "adsas";
